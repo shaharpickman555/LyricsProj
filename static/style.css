@@ -1,0 +1,33 @@
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f9f9f9;
+    color: #333;
+    padding: 20px;
+}
+
+h1 {
+    font-family: 'Georgia', serif;
+    color: #4a90e2;
+}
+
+#transcription {
+    margin-top: 20px;
+    font-size: 18px;
+    line-height: 1.6;
+    white-space: pre-wrap;  /* Ensure that whitespace is preserved */
+}
+
+#transcription.rtl {
+    direction: rtl;
+    text-align: right;
+}
+
+.highlight {
+    color: red;
+    font-weight: bold;
+}
+
+span {
+    display: inline-block;
+    margin-right: 2px;
+}

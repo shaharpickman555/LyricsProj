@@ -1,0 +1,296 @@
+1
+00:00:01,960 --> 00:00:03,120
+<u>I</u> found a love for me
+
+2
+00:00:03,120 --> 00:00:03,520
+I<u> found</u> a love for me
+
+3
+00:00:03,520 --> 00:00:03,780
+I found<u> a</u> love for me
+
+4
+00:00:03,780 --> 00:00:04,160
+I found a<u> love</u> for me
+
+5
+00:00:04,160 --> 00:00:06,420
+I found a love<u> for</u> me
+
+6
+00:00:06,420 --> 00:00:09,820
+I found a love for<u> me</u>
+
+7
+00:00:09,820 --> 00:00:10,900
+<u>Darling,</u> just die right in
+
+8
+00:00:10,900 --> 00:00:11,140
+Darling, just die right in
+
+9
+00:00:11,140 --> 00:00:11,420
+Darling,<u> just</u> die right in
+
+10
+00:00:11,420 --> 00:00:11,820
+Darling, just<u> die</u> right in
+
+11
+00:00:11,820 --> 00:00:12,300
+Darling, just die<u> right</u> in
+
+12
+00:00:12,300 --> 00:00:12,760
+Darling, just die right<u> in</u>
+
+13
+00:00:12,760 --> 00:00:14,440
+<u>Follow</u> my lead
+
+14
+00:00:14,440 --> 00:00:15,120
+Follow<u> my</u> lead
+
+15
+00:00:15,120 --> 00:00:16,120
+Follow my<u> lead</u>
+
+16
+00:00:16,120 --> 00:00:18,280
+<u>I</u> found a girl
+
+17
+00:00:18,280 --> 00:00:18,700
+I<u> found</u> a girl
+
+18
+00:00:18,700 --> 00:00:19,060
+I found<u> a</u> girl
+
+19
+00:00:19,060 --> 00:00:20,200
+I found a<u> girl</u>
+
+20
+00:00:20,200 --> 00:00:22,580
+<u>Beautiful</u> and sweet
+
+21
+00:00:22,580 --> 00:00:23,420
+Beautiful<u> and</u> sweet
+
+22
+00:00:23,420 --> 00:00:24,000
+Beautiful and<u> sweet</u>
+
+23
+00:00:24,000 --> 00:00:25,780
+<u>I</u> never knew you were the someone
+
+24
+00:00:25,780 --> 00:00:26,300
+I<u> never</u> knew you were the someone
+
+25
+00:00:26,300 --> 00:00:26,860
+I never<u> knew</u> you were the someone
+
+26
+00:00:26,860 --> 00:00:27,400
+I never knew<u> you</u> were the someone
+
+27
+00:00:27,400 --> 00:00:27,980
+I never knew you<u> were</u> the someone
+
+28
+00:00:27,980 --> 00:00:28,280
+I never knew you were<u> the</u> someone
+
+29
+00:00:28,280 --> 00:00:28,920
+I never knew you were the<u> someone</u>
+
+30
+00:00:28,920 --> 00:00:29,860
+<u>Waiting</u> for me
+
+31
+00:00:29,860 --> 00:00:30,240
+Waiting<u> for</u> me
+
+32
+00:00:30,240 --> 00:00:30,840
+Waiting for<u> me</u>
+
+33
+00:00:30,840 --> 00:00:32,220
+<u>Because</u> we were just kids when we fell in love
+
+34
+00:00:32,220 --> 00:00:32,540
+Because<u> we</u> were just kids when we fell in love
+
+35
+00:00:32,540 --> 00:00:32,800
+Because we<u> were</u> just kids when we fell in love
+
+36
+00:00:32,800 --> 00:00:33,060
+Because we were<u> just</u> kids when we fell in love
+
+37
+00:00:33,060 --> 00:00:33,460
+Because we were just<u> kids</u> when we fell in love
+
+38
+00:00:33,460 --> 00:00:33,780
+Because we were just kids<u> when</u> we fell in love
+
+39
+00:00:33,780 --> 00:00:34,040
+Because we were just kids when<u> we</u> fell in love
+
+40
+00:00:34,040 --> 00:00:34,720
+Because we were just kids when we<u> fell</u> in love
+
+41
+00:00:34,720 --> 00:00:35,740
+Because we were just kids when we fell<u> in</u> love
+
+42
+00:00:35,740 --> 00:00:36,460
+Because we were just kids when we fell in<u> love</u>
+
+43
+00:00:36,460 --> 00:00:37,260
+<u>Not</u> knowing what it was
+
+44
+00:00:37,260 --> 00:00:37,760
+Not<u> knowing</u> what it was
+
+45
+00:00:37,760 --> 00:00:38,720
+Not knowing<u> what</u> it was
+
+46
+00:00:38,720 --> 00:00:39,400
+Not knowing what<u> it</u> was
+
+47
+00:00:39,400 --> 00:00:40,360
+Not knowing what it<u> was</u>
+
+48
+00:00:40,360 --> 00:00:41,060
+<u>I</u> will not give you up this time
+
+49
+00:00:41,060 --> 00:00:41,320
+I<u> will</u> not give you up this time
+
+50
+00:00:41,320 --> 00:00:41,640
+I will<u> not</u> give you up this time
+
+51
+00:00:41,640 --> 00:00:42,080
+I will not<u> give</u> you up this time
+
+52
+00:00:42,080 --> 00:00:43,280
+I will not give<u> you</u> up this time
+
+53
+00:00:43,280 --> 00:00:44,360
+I will not give you<u> up</u> this time
+
+54
+00:00:44,360 --> 00:00:45,440
+I will not give you up<u> this</u> time
+
+55
+00:00:45,440 --> 00:00:47,420
+I will not give you up this<u> time</u>
+
+56
+00:00:47,420 --> 00:00:48,800
+<u>Darling,</u> just kiss me slow
+
+57
+00:00:48,800 --> 00:00:49,220
+Darling,<u> just</u> kiss me slow
+
+58
+00:00:49,220 --> 00:00:49,700
+Darling, just<u> kiss</u> me slow
+
+59
+00:00:49,700 --> 00:00:50,600
+Darling, just kiss<u> me</u> slow
+
+60
+00:00:50,600 --> 00:00:51,420
+Darling, just kiss me<u> slow</u>
+
+61
+00:00:51,420 --> 00:00:52,360
+<u>Your</u> heart is all I own
+
+62
+00:00:52,360 --> 00:00:52,880
+Your<u> heart</u> is all I own
+
+63
+00:00:52,880 --> 00:00:53,080
+Your heart<u> is</u> all I own
+
+64
+00:00:53,080 --> 00:00:53,720
+Your heart is<u> all</u> I own
+
+65
+00:00:53,720 --> 00:00:54,680
+Your heart is all<u> I</u> own
+
+66
+00:00:54,680 --> 00:00:55,540
+Your heart is all I<u> own</u>
+
+67
+00:00:55,540 --> 00:00:56,320
+<u>And</u> in your eyes you're holding my hand
+
+68
+00:00:56,320 --> 00:00:56,500
+And<u> in</u> your eyes you're holding my hand
+
+69
+00:00:56,500 --> 00:00:56,840
+And in<u> your</u> eyes you're holding my hand
+
+70
+00:00:56,840 --> 00:00:57,660
+And in your<u> eyes</u> you're holding my hand
+
+71
+00:00:57,660 --> 00:00:58,560
+And in your eyes<u> you're</u> holding my hand
+
+72
+00:00:58,560 --> 00:00:59,780
+And in your eyes you're<u> holding</u> my hand
+
+73
+00:00:59,780 --> 00:01:00,240
+And in your eyes you're holding<u> my</u> hand
+
+74
+00:01:00,240 --> 00:01:00,240
+And in your eyes you're holding my<u> hand</u>
+

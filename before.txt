@@ -1,0 +1,1 @@
+dict = [{'text': " I dream so big and loud I jump so high I touch the clouds Whoa-oh-oh-oh-oh-oh Whoa-oh-oh-oh-oh-oh I stretch my hands out to the sky We dance with monsters through the night Whoa-oh-oh-oh-oh-oh Whoa-oh-oh-oh-oh-oh I'm never gonna look back Whoa, I'm never gonna give it up No, please don't wake me now", 'start': 13.626, 'end': 40.35}]
