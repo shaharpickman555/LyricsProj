@@ -1,11 +1,11 @@
 from flask import Flask, request, jsonify, render_template
-import whisper
+#import whisper
 import whisperx
 import os
 
 app = Flask(__name__)
 # model = whisper.load_model("large")
-model = whisperx.load_model("large-v2",device='cpu',compute_type='int8')
+model = whisperx.load_model("large-v3", device='cuda', compute_type='int8', vad_options={"vad_onset": 0.05, "vad_offset": 0.05})
 
 @app.route('/')
 def index():
