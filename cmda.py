@@ -4,7 +4,7 @@ from collections import Counter
 import unicodedata
     
 from faster_whisper import WhisperModel
-from audio_separator.separator import Separator
+import demucs.api
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -16,7 +16,7 @@ loaded_model = None
 def load_whisper(lang):
     global loaded_model_name, loaded_model
     model_name = whisper_models.get(lang, whisper_models[None])
-    if model_name == loaded_model:
+    if model_name == loaded_model_name:
         return loaded_model, False
         
     loaded_model = WhisperModel(model_name, device="cuda", compute_type="int8")
@@ -29,19 +29,40 @@ def load_separator():
     global loaded_separator
     if loaded_separator is not None:
         return load_separator
-    loaded_separator = Separator(output_single_stem='instrumental')
-    loaded_separator.load_model()
-    print('loaded separator')
-
+    loaded_separator = demucs.api.Separator(model='htdemucs')
     return loaded_separator
 
-def segment(result, max_characters_per_line=30, max_lines=2):
+def segment(result):
+    result = [segment.words for segment in result]
+    
+    word_durations = [word.end - word.start for segment in result for word in segment]
+    avg_word_duration = sum(word_durations) / len(word_durations)
+    
+    word_speed = 1/avg_word_duration
+    print(word_speed)
+    
+    max_characters_per_line = 30
+    max_lines = max(2, int(word_speed - 1))
+    
+    # #merge small segments
+    # result_merged = []
+    # for segment in result:
+        # if len(segment) <= 3 and result_merged:
+            # result_merged[-1].extend(segment)
+        # else:
+            # result_merged.append(segment)
+    # result = result_merged
+    
+    #merge all?
+    if word_speed >= 3.5:
+        result = [[word for segment in result for word in segment]]
+        
     all_new_segments = []
     for segment in result:
         current_segment = []
         current_line = []
         current_line_len = 0
-        for word in itertools.chain(segment.words, [None]):
+        for word in itertools.chain(segment, [None]):
             if word is None or (current_line_len + len(word.word.strip()) > max_characters_per_line and current_line_len > 0): #really long words
                 #flush line
                 
@@ -134,14 +155,20 @@ Format: Layer, Start, End, Style, Text
     open('sub.ass', 'w', encoding='utf8').write(header+'\n'.join(ass_lines))
     return 'sub.ass'
 
-def instrumental(separator, path):
-    output_files = separator.separate(path)
-    return output_files[0]
+def instrumental(separator, input, output):
+    origin, separated = separator.separate_audio_file(input)
+
+    #inst = sum(data for name, data in separated.items() if name != 'vocals')
+    inst = origin - separated['vocals']
     
-def work(audiopath, outputpath, max_characters_per_line=30, max_lines=2):
+    demucs.api.save_audio(inst, output, samplerate=separator.samplerate)
+    return output
+    
+def work(audiopath, outputpath):
     model, _ = load_whisper(None)
-    
     separator = load_separator()
+    
+    t1 = time.time()
     result, info = model.transcribe(audiopath, word_timestamps=True)
     
     model, reloaded = load_whisper(info.language)
@@ -151,15 +178,20 @@ def work(audiopath, outputpath, max_characters_per_line=30, max_lines=2):
     
     segments = segment(result)
     asspath = make_ass(segments)
-    soundpath = instrumental(separator, audiopath)
+    soundpath = instrumental(separator, audiopath, f'{audiopath}_inst.mp3')
     
     try:
-        process = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', soundpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}', outputpath], capture_output=True)
+        process = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', soundpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}', '-vcodec', 'h264', outputpath], capture_output=True)
         if process.returncode != 0:
             raise RuntimeError('ffmpeg failed')
     finally:
+        pass
         os.remove(asspath)
         os.remove(soundpath)
+        
+    t2 = time.time()
+    
+    print(f't: {t2 - t1}')
 
 
 def main(argv):
