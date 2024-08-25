@@ -8,7 +8,11 @@ import demucs.api
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-
+from dotenv import load_dotenv
+load_dotenv()
+client_id = os.getenv("SPOTIPY_CLIENT_ID")
+client_secret = os.getenv("SPOTIPY_CLIENT_SECRET")
+from spotdl import Spotdl
 import yt_dlp
 import ffmpeg
 import re
@@ -29,6 +33,15 @@ def youtube_to_wav(url):
     stream = ffmpeg.input('output.m4a')
     stream = ffmpeg.output(stream, 'output.wav')
     return 'youtube_sound.wav'
+
+def download_spotify_track(spotify_url):
+    # spotdl = Spotdl(client_id=client_id,client_secret=client_secret)
+    # spotdl.download([spotify_url])
+    process = subprocess.run(['spotdl.exe', 'download', spotify_url, '--output','spotify_sound.%(ext)s'], capture_output=True)
+    if process.returncode != 0:
+        raise RuntimeError('spotdl failed')
+    return 'spotify_sound.wav'
+
 
 def load_whisper(lang):
     global loaded_model_name, loaded_model
@@ -228,15 +241,19 @@ def work(audiopath, outputpath):
 
 def main(argv):
     if len(argv) < 2:
-        print(f'Usage {argv[0]} <input sound path OR youtube link> [output path]')
+        print(f'Usage {argv[0]} <input sound path OR youtube link OR spotify link> [output path]')
         return
     youtube_regex = re.compile(r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/.+')
+    spotify_regex = re.compile(r'(https?://)?(open\.)?spotify\.com/track/.+')
     if os.path.isfile(argv[1]): # local audio file
         sound_path = argv[1]
     elif re.match(youtube_regex, argv[1]): # youtube link
         sound_path = youtube_to_wav(argv[1])
+    elif re.match(spotify_regex, argv[1]): # spotify track link
+        sound_path = download_spotify_track(argv[1])
     else:
-        print("SPOTIFY LINK")
+        print("NOT A VALID ARGUMENT")
+        return
 
     if len(argv) == 2:
         last_dot = sound_path.rfind('.') if '.' in sound_path else None
@@ -249,4 +266,5 @@ def main(argv):
 
 if __name__ == '__main__':
     # youtube_to_wav('https://www.youtube.com/watch?v=9YyyDMDBk0U')
-    main(sys.argv)
+    # main(sys.argv)
+    download_spotify_track(spotify_url='https://open.spotify.com/track/4ttUzFCVnlOmopuzM4oEUJ?si=806e2faf85d94e12')
