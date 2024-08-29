@@ -2,7 +2,7 @@ import time, itertools, pprint, subprocess, sys
 from collections import Counter
 import unicodedata
 from faster_whisper import WhisperModel
-import demucs.api
+import demucs.separate
 import streamlit as st
 from pathlib import Path
 import os
@@ -39,14 +39,14 @@ def load_whisper(lang):
     loaded_model_name = model_name
     return loaded_model, True
 
-loaded_separator = None
+# loaded_separator = None
 
-def load_separator():
-    global loaded_separator
-    if loaded_separator is not None:
-        return load_separator
-    loaded_separator = demucs.api.Separator(model='htdemucs')
-    return loaded_separator
+# def load_separator():
+#     global loaded_separator
+#     if loaded_separator is not None:
+#         return load_separator
+#     loaded_separator = demucs.api.Separator(model='htdemucs')
+#     return loaded_separator
 
 def segment(result):
     result = [segment.words for segment in result]
@@ -140,18 +140,18 @@ Format: Layer, Start, End, Style, Text
     open('sub.ass', 'w', encoding='utf8').write(header + '\n'.join(ass_lines))
     return 'sub.ass'
 
-def instrumental(separator, input, output):
-    origin, separated = separator.separate_audio_file(input)
-    # inst = sum(data for name, data in separated.items() if name != 'vocals')
-    inst = origin - separated['vocals']
-    demucs.api.save_audio(inst, output, samplerate=separator.samplerate)
-    print(output)
-    return output
+def instrumental(input, output):
+    base_name = os.path.basename(input)
+    file_name, _ = os.path.splitext(base_name)
+    demucs.separate.main(["--two-stems=vocals", "-o", ".", input])
+    print("FINISHED DEMUCS")
+    inst = f'./htdemucs/{file_name}/no_vocals.wav'
+    # demucs.api.save_audio(inst, output, samplerate=separator.samplerate)
+    return inst
 
 def work(audiopath, outputpath):
-    print(audiopath)
     model, _ = load_whisper(None)
-    separator = load_separator()
+    # separator = load_separator()
     t1 = time.time()
     result, info = model.transcribe(audiopath, word_timestamps=True)
     model, reloaded = load_whisper(info.language)
@@ -159,7 +159,7 @@ def work(audiopath, outputpath):
         result, info = model.transcribe(audiopath, word_timestamps=True)
     segments = segment(result)
     asspath = make_ass(segments)
-    soundpath = instrumental(separator, audiopath, f'{audiopath}_inst.mp3')
+    soundpath = instrumental(audiopath, f'{audiopath}_inst.mp3')
     try:
         process = subprocess.run(
             ['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', soundpath, '-shortest', '-fflags',
