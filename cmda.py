@@ -1,26 +1,39 @@
-#import whisper
-import time, itertools, pprint, subprocess, sys, math
-from collections import Counter
+import time, itertools, pprint, subprocess, sys, math, os, collections, re
 import unicodedata
+from pathlib import Path
+from urllib.parse import urlparse
 
 import torch
 from faster_whisper import WhisperModel
 import demucs.api
+import yt_dlp
+import streamlit as st
 
-import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
-whisper_models = {None: 'large-v3'} #'he': 'ivrit-ai/faster-whisper-v2-d3-e3', 
+
+whisper_models = {None: 'large-v3'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
 loaded_model_name = None
 loaded_model = None
+
+def youtube_to_mp3(url):
+    ydl_opts = {
+        'extract_audio': True,
+        'format': 'bestaudio',
+        'outtmpl': '%(id)s.mp3',
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        outfile = f'{info['id']}.mp3'
+    return outfile, info['title']
 
 def load_whisper(lang):
     global loaded_model_name, loaded_model
     model_name = whisper_models.get(lang, whisper_models[None])
     if model_name == loaded_model_name:
         return loaded_model, False
-        
-    loaded_model = WhisperModel(model_name, device="cuda", compute_type="int8")
+
+    loaded_model = WhisperModel(model_name, device="auto", compute_type="int8")
     print(f'loaded {model_name}')
     loaded_model_name = model_name
     return loaded_model, True
@@ -41,20 +54,11 @@ def segment(result):
     
     max_characters_per_line = 30
     max_lines = max(2, int(words_per_spoken_second - 1))
-    
-    # #merge small segments
-    # result_merged = []
-    # for segment in result:
-        # if len(segment) <= 3 and result_merged:
-            # result_merged[-1].extend(segment)
-        # else:
-            # result_merged.append(segment)
-    # result = result_merged
-    
+
     #merge all?
     if words_per_spoken_second >= 3.5:
         result = [[word for segment in result for word in segment]]
-        
+
     all_new_segments = []
     for segment in result:
         current_segment = []
@@ -65,43 +69,43 @@ def segment(result):
                 #flush line
                 
                 if len(current_segment) >= max_lines:
-                    #flush segment
+                    # flush segment
                     all_new_segments.append(current_segment)
                     current_segment = []
-                
+
                 if current_line:
                     current_segment.append(current_line)
                 current_line = []
                 current_line_len = 0
-                
+
                 if word is None:
-                    #flush line again
+                    # flush line again
                     if current_segment:
                         all_new_segments.append(current_segment)
                     current_segment = []
-            
+
             if word is not None:
                 current_line.append(word)
                 current_line_len += len(word.word.strip())
-    
+
     return all_new_segments
 
 def dominant_strong_direction(s):
-    count = Counter([unicodedata.bidirectional(c) for c in list(s)])
+    count = collections.Counter([unicodedata.bidirectional(c) for c in list(s)])
     rtl_count = count['R'] + count['AL'] + count['RLE'] + count["RLI"]
-    ltr_count = count['L'] + count['LRE'] + count["LRI"] 
+    ltr_count = count['L'] + count['LRE'] + count["LRI"]
     return "rtl" if rtl_count > ltr_count else "ltr"
 
 def ass_time(seconds):
     return f'{int(seconds // 3600)}:{int(seconds % 3600 // 60):02d}:{int(seconds % 60):02d}.{int(seconds * 100 % 100):02d}'
-    
+
 def output_line(words, selected_word):
     text_wrap = r'{{\c&H{color}&}}{text}{{\r}}'
     marked_color = '0000FF'
     unmarked_colors = ['FFFFFF', 'FEFEFE']
-    
+
     direction = dominant_strong_direction(''.join(w.word for w in words))
-    
+
     wrapped = [text_wrap.format(text=w.word, color=marked_color if w == selected_word else unmarked_colors[i % 2]) for i,w in enumerate(words)]
     
     return ''.join(reversed(wrapped) if direction == 'rtl' else wrapped)
@@ -167,8 +171,6 @@ Format: Layer, Start, End, Style, Text
             disappear_batch_first_line = line_to_first_line_in_batch(appear_batch_first_line + num_lines)
             disappear_batch_last_line = first_line_to_last_line(disappear_batch_first_line)
             
-            print(i, batch_size, appear_batch_first_line, appear_batch_last_line, disappear_batch_first_line, disappear_batch_last_line)
-            
             if appear_batch_first_line < 0:
                 appear_time = max(segment[0][0].start - 1, 0)
             else:
@@ -200,9 +202,7 @@ Format: Layer, Start, End, Style, Text
 
         last_segment_end = segment[-1][-1].end
     
-    open('sub.ass', 'w', encoding='utf8').write(header+'\n'.join(ass_lines))
-    return 'sub.ass'
-    
+    return header + '\n'.join(ass_lines)
 
 def instrumental(separator, input, output, start_silence, end_silence):
     origin, separated = separator.separate_audio_file(input)
@@ -223,44 +223,77 @@ def work(audiopath, outputpath):
     
     t1 = time.time()
     result, info = model.transcribe(audiopath, word_timestamps=True)
-    
+
     model, reloaded = load_whisper(info.language)
-    
+
     if reloaded:
         result, info = model.transcribe(audiopath, word_timestamps=True)
-    
+
     segments = segment(result)
     start_silence = 1
-    asspath = make_ass_swap(segments, offset=start_silence + 0.1)
+    assdata = make_ass_swap(segments, offset=start_silence + 0.1)
+    asspath = f'{audiopath}.ass'
+    
     soundpath = instrumental(separator, audiopath, f'{audiopath}_inst.mp3', start_silence=start_silence, end_silence=start_silence)
     
+    open(asspath, 'w', encoding='utf8').write(assdata)
+
     try:
         process = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', soundpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}', '-vcodec', 'h264', outputpath], capture_output=True)
         if process.returncode != 0:
-            raise RuntimeError('ffmpeg failed')
+            raise RuntimeError(f'ffmpeg failed: {process.stderr}')
     finally:
         pass
         #os.remove(asspath)
         #os.remove(soundpath)
         
     t2 = time.time()
-    
+
     print(f't: {t2 - t1}')
 
-
 def main(argv):
-    if len(argv) < 2:
-        print(f'Usage {argv[0]} <sound path> [output path]')
-        return
+    if len(argv) >= 2 and argv[1] == '-cli':
+        if len(argv) == 2:
+            print(f'Usage {argv[0]} -cli <input> [output]')
+            return
+            
+        input = argv[2]
         
-    sound_path = argv[1]
-    if len(argv) == 2:
-        last_dot = sound_path.rfind('.') if '.' in sound_path else None
-        output_path = f'{sound_path[:last_dot]}.mp4'
-    else:
-        output_path = argv[2]
-        
-    work(sound_path, output_path)
+        if not os.path.isfile(input):
+            #maybe youtube?
+            input, title = youtube_to_mp3(input)
+            
+        if len(argv) == 3:
+            last_dot = input.rfind('.') if '.' in input else None
+            output_path = f'{input[:last_dot]}.mp4'
+        else:
+            output_path = argv[3]
+
+        return work(input, output_path)
     
+    st.title("Karaoke Generator")
+    input_type = st.radio("Input Type", ["Local File", "YouTube Link"])
+    if input_type == "Local File":
+        uploaded_file = st.file_uploader("Choose an audio file (mp3 or wav)", type=["mp3", "wav"])
+        if uploaded_file is not None:
+            file = Path(f'./uploads/{uploaded_file.name}')
+            local_path = f'./uploads/{uploaded_file.name}'
+            with open(file, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.success(f"File uploaded: {file}")
+    else:
+        youtube_url = st.text_input("YouTube Link")
+        if youtube_url:
+            local_path, title = youtube_to_mp3(youtube_url)
+            print(youtube_url)
+            st.success(f"Downloaded YouTube audio: {local_path}")
+    output_path = st.text_input("Output MP4 File Path (Optional)", 'RESULT.mp4')
+    if st.button("Generate Karaoke Video"):
+        with st.spinner('Processing...'):
+            work(local_path, output_path)
+        st.success("Karaoke video generated!")
+        st.video(output_path)
+
 if __name__ == '__main__':
     main(sys.argv)
+
