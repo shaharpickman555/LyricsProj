@@ -24,7 +24,7 @@ def youtube_to_mp3(url):
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        outfile = f'{info['id']}.mp3'
+        outfile = f'{info["id"]}.mp3'
     return outfile, info['title']
 
 def load_whisper(lang):
