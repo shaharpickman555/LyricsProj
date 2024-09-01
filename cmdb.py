@@ -12,7 +12,7 @@ import streamlit as st
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 
-whisper_models = {None: 'large-v3'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
+whisper_models = {None: 'tiny'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
 loaded_model_name = None
 loaded_model = None
 
@@ -149,7 +149,8 @@ Format: Layer, Start, End, Style, Text
 
     y_off = 120
     
-    num_lines = max(min(int(words_per_spoken_second - 1), 800 / y_off), 2)
+    #always even
+    num_lines = int(math.ceil(max(min(int(words_per_spoken_second - 1), 800 / y_off), 2) / 2) * 2)
     
     ystart = 400 - (y_off * num_lines / 2)
     
@@ -195,7 +196,8 @@ Format: Layer, Start, End, Style, Text
             
             #counter
             if len(line) > 1:
-                if (line[0].start - actual_appear_time) >= prepare_time_seconds:
+                time_since_last_word = (line[0].start - segment[i - 1][-1].end) if i > 0 else (line[0].start - (last_segment_end or 0))
+                if time_since_last_word >= prepare_time_seconds:
                     clock_duration = 4
                     
                     ass_lines.extend(ass_circle(2, 200, 100, line[0].start - clock_duration + offset, line[0].start + offset, 0.5))
