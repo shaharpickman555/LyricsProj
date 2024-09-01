@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Playlist Manager</title>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.1/socket.io.min.js"></script>
+    <style>
+        /* Styling for the Current Video headline */
+        h3 {
+            text-align: center;
+            font-family: 'Arial', sans-serif;
+            color: #333;
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        #currentVideo {
+            color: #ff4d4d;
+            font-weight: bold;
+        }
+
+        /* Styling the playlist container */
+        #playlist {
+            list-style-type: none;
+            padding: 0;
+            max-width: 400px;
+            margin: auto;
+        }
+
+        /* Styling each playlist item */
+        #playlist li {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            cursor: move;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.5s, opacity 2s ease;
+        }
+
+        /* Remove button styling */
+        .remove-btn {
+            background-color: #ff4d4d;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 12px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        /* Red background when removing */
+        .removing {
+            background-color: #ff4d4d !important;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h3>Current Video: <span id="currentVideo">{{ current_video }}</span></h3>
+        <ul id="playlist">
+            <!-- Playlist will be dynamically populated -->
+        </ul>
+    </div>
+
+    <script>
+        var socket = io();
+
+        function renderPlaylist(playlist) {
+            var list = document.getElementById('playlist');
+            list.innerHTML = '';
+            playlist.forEach(function(video, index) {
+                var li = document.createElement('li');
+                li.textContent = video;
+                li.dataset.index = index;
+                li.draggable = true;
+
+                // Add remove button
+                var removeButton = document.createElement('button');
+                removeButton.textContent = 'Remove';
+                removeButton.className = 'remove-btn';
+                removeButton.onclick = function() {
+                    markForRemoval(li, index);
+                };
+
+                li.appendChild(removeButton);
+
+                // Drag and drop functionality
+                li.ondragstart = function(e) {
+                    e.dataTransfer.setData('text/plain', e.target.dataset.index);
+                };
+
+                li.ondragover = function(e) {
+                    e.preventDefault();
+                };
+
+                li.ondrop = function(e) {
+                    e.preventDefault();
+                    var fromIndex = e.dataTransfer.getData('text/plain');
+                    var toIndex = e.target.dataset.index;
+
+                    if (fromIndex !== toIndex) {
+                        var movedItem = playlist.splice(fromIndex, 1)[0];
+                        playlist.splice(toIndex, 0, movedItem);
+                        renderPlaylist(playlist);
+
+                        // Automatically save the new order
+                        socket.emit('reorder_playlist', playlist);
+                    }
+                };
+
+                list.appendChild(li);
+            });
+        }
+
+        function markForRemoval(li, index) {
+            // Mark the item for removal with a red background
+            li.classList.add('removing');
+
+            // Fade out and remove after 2 seconds
+            setTimeout(function() {
+                li.style.opacity = '0';
+            }, 2000);
+
+            // Remove the item from the playlist after 2 seconds
+            setTimeout(function() {
+                removeItemFromPlaylist(index);
+            }, 4000);
+        }
+
+        function removeItemFromPlaylist(index) {
+            var playlist = [];
+            var items = document.querySelectorAll('#playlist li');
+            items.forEach(function(item, i) {
+                if (i !== index) {
+                    playlist.push(item.textContent.replace('Remove', '').trim());
+                }
+            });
+            renderPlaylist(playlist);
+            socket.emit('reorder_playlist', playlist);
+        }
+
+        socket.emit('get_playlist');
+
+        socket.on('update_playlist', function(playlist) {
+            renderPlaylist(playlist);
+        });
+
+        socket.on('update_current_video', function(current_video) {
+            document.getElementById('currentVideo').textContent = current_video;
+        });
+    </script>
+</body>
+</html>
