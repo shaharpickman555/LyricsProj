@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Video Player</title>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.1/socket.io.min.js"></script>
+    <style>
+        /* Styling for the video container */
+        #videoContainer {
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        /* Styling for the Next Song button */
+        #nextButton {
+            background-color: #007bff;
+            color: white;
+            padding: 15px 30px;
+            font-size: 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+
+        #nextButton:hover {
+            background-color: #0056b3;
+        }
+
+        #nextButton:active {
+            background-color: #004080;
+        }
+    </style>
+</head>
+<body>
+    <div id="videoContainer">
+        {% if current_video %}
+        <video id="videoPlayer" controls autoplay>
+            <source src="{{ url_for('static', filename='videos/' + current_video) }}" type="video/mp4">
+        </video>
+        {% else %}
+        <p>No videos in the playlist.</p>
+        {% endif %}
+    </div>
+    <div style="text-align: center;">
+        <button id="nextButton">Next Song</button>
+    </div>
+
+    <script>
+        var socket = io();
+
+        document.getElementById('nextButton').onclick = function() {
+            socket.emit('next_video');
+        };
+
+        socket.on('update_video', function(video) {
+            var videoContainer = document.getElementById('videoContainer');
+            if (video) {
+                videoContainer.innerHTML = `<video id="videoPlayer" controls autoplay>
+                                                <source src="/static/videos/${video}" type="video/mp4">
+                                            </video>`;
+            } else {
+                videoContainer.innerHTML = '<p>No videos in the playlist.</p>';
+            }
+        });
+    </script>
+</body>
+</html>
