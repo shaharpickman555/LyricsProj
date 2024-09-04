@@ -2,12 +2,17 @@ import time, itertools, pprint, subprocess, sys, math, os, collections, re
 import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse
+import argparse
 
 import torch
 from faster_whisper import WhisperModel
 import demucs.api
 import yt_dlp
 import streamlit as st
+
+import warnings
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="unhashable type: 'list'", category=UserWarning)
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
@@ -25,6 +30,16 @@ def youtube_to_mp3(url):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         outfile = f'{info["id"]}.mp3'
+    return outfile, info['title']
+
+def youtube_to_mp4(url):
+    ydl_opts = {
+        'format': 'mp4',
+        'outtmpl': '%(id)s.mp4',
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        outfile = f'{info["id"]}.mp4'
     return outfile, info['title']
 
 def load_whisper(lang):
@@ -208,21 +223,16 @@ Format: Layer, Start, End, Style, Text
 
 def instrumental(separator, input, output, start_silence, end_silence):
     origin, separated = separator.separate_audio_file(input)
-
-    #inst = sum(data for name, data in separated.items() if name != 'vocals')
     inst = origin - separated['vocals']
-    
     silence1 = torch.zeros([2, start_silence * separator.samplerate])
     silence2 = torch.zeros([2, end_silence * separator.samplerate])
     inst = torch.cat((silence1, inst, silence2), dim=-1)
-    
     demucs.api.save_audio(inst, output, samplerate=separator.samplerate)
     return output
     
-def work(audiopath, outputpath):
+def work(audiopath, outputpath,separator):
     model, _ = load_whisper(None)
-    separator = load_separator()
-    
+    start_silence = 1
     t1 = time.time()
     result, info = model.transcribe(audiopath, word_timestamps=True)
 
@@ -232,7 +242,6 @@ def work(audiopath, outputpath):
         result, info = model.transcribe(audiopath, word_timestamps=True)
 
     segments = segment(result)
-    start_silence = 1
     assdata = make_ass_swap(segments, offset=start_silence + 0.1)
     asspath = f'{audiopath}.ass'
     
@@ -253,26 +262,78 @@ def work(audiopath, outputpath):
 
     print(f't: {t2 - t1}')
 
+def short_work(mp3_input,mp4_input,output_path,separator):
+    start_silence = 0
+    soundpath = instrumental(separator, mp3_input, f'{mp3_input}_inst.mp3',
+                             start_silence=start_silence,end_silence=start_silence)
+    try:
+        process = subprocess.run(['ffmpeg', '-i', mp4_input, '-i', soundpath, '-c:v','copy','-map','0:v:0','-map','1:a:0','-shortest', output_path], capture_output=True)
+        if process.returncode != 0:
+            raise RuntimeError(f'ffmpeg failed: {process.stderr}')
+    finally:
+        pass
+        os.remove(soundpath)
+
+def extract_audio_from_mp4(mp4_file):
+    last_dot = mp4_file.rfind('.') if '.' in mp4_file else None
+    mp3out_path = f'{mp4_file[:last_dot]}.mp3'
+    try:
+        process = subprocess.run(['ffmpeg', '-i', mp4_file, '-q:a', '0', '-map', 'a', mp3out_path], capture_output=True)
+        if process.returncode != 0:
+            raise RuntimeError(f'ffmpeg failed: {process.stderr}')
+    finally:
+        pass
+        return mp3out_path
+
 def main(argv):
-    if len(argv) >= 2 and argv[1] == '-cli':
-        if len(argv) == 2:
-            print(f'Usage {argv[0]} -cli <input> [output]')
-            return
-            
-        input = argv[2]
-        
-        if not os.path.isfile(input):
-            #maybe youtube?
-            input, title = youtube_to_mp3(input)
-            
-        if len(argv) == 3:
+    parser = argparse.ArgumentParser(
+        description="A karaoke tool to process input songs and create karaoke videos."
+    )
+    parser.add_argument(
+        '-i', '--input',
+        type=str,
+        default=None,
+        help="Your song for karaoke (local file or youtube link)"
+    )
+    parser.add_argument(
+        '-o', '--output',
+        type=str,
+        default=None,
+        help="Your mp4 karaoke song output file"
+    )
+    parser.add_argument(
+        '-ahs', '--already-has-lyrics',
+        action='store_true',
+        default=False,
+        help="Add if its already a lyric video"
+    )
+    args = parser.parse_args()
+    separator = load_separator()
+
+    if(len(argv) >= 2): # CLI Mode
+        input = args.input
+
+        if args.output != None:
+            output_path = args.output
+        else:
             last_dot = input.rfind('.') if '.' in input else None
             output_path = f'{input[:last_dot]}.mp4'
-        else:
-            output_path = argv[3]
 
-        return work(input, output_path)
-    
+        if not os.path.isfile(input):  # YT Link
+            mp3_input, title = youtube_to_mp3(input)
+            if args.already_has_lyrics:
+                mp4_input, title = youtube_to_mp4(input)
+        else: # Local File
+            mp3_input = input
+            if args.already_has_lyrics:
+                mp4_input = input
+                mp3_input = extract_audio_from_mp4(input)
+
+        if args.already_has_lyrics:
+            return short_work(mp3_input,mp4_input,output_path, separator)
+        else:
+            return work(mp3_input, output_path, separator)
+
     st.title("Karaoke Generator")
     input_type = st.radio("Input Type", ["Local File", "YouTube Link"])
     if input_type == "Local File":
