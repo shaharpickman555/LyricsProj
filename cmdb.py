@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import argparse
 
 import torch
-from faster_whisper import WhisperModel
+from faster_whisper import WhisperModel, vad
 import demucs.api
 import yt_dlp
 import streamlit as st
@@ -17,29 +17,27 @@ with warnings.catch_warnings():
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 
-whisper_models = {None: 'tiny'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
+whisper_models = {None: 'large-v3'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
 loaded_model_name = None
 loaded_model = None
 
-def youtube_to_mp3(url):
-    ydl_opts = {
-        'extract_audio': True,
-        'format': 'bestaudio',
-        'outtmpl': '%(id)s.mp3',
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        outfile = f'{info["id"]}.mp3'
-    return outfile, info['title']
+def replace_ext(path, ext):
+    if '.' not in path:
+        return f'{path}{ext}'
+    return f'{path[:path.rfind('.')]}{ext}'
 
-def youtube_to_mp4(url):
+def youtube_download(url, audio_only=True):
+    ext = 'mp3' if audio_only else 'mp4'
     ydl_opts = {
-        'format': 'mp4',
-        'outtmpl': '%(id)s.mp4',
+        'format': 'bestaudio',
+        'outtmpl': f'%(id)s.{ext}',
     }
+    if audio_only:
+        ydl_opts['extract_audio'] = True
+        
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        outfile = f'{info["id"]}.mp4'
+        outfile = f'{info["id"]}.{ext}'
     return outfile, info['title']
 
 def load_whisper(lang):
@@ -57,7 +55,7 @@ loaded_separator = None
 def load_separator():
     global loaded_separator
     if loaded_separator is not None:
-        return load_separator
+        return loaded_separator
     loaded_separator = demucs.api.Separator(model='htdemucs')
     return loaded_separator
 
@@ -221,20 +219,48 @@ Format: Layer, Start, End, Style, Text
     
     return header + '\n'.join(ass_lines)
 
-def instrumental(separator, input, output, start_silence, end_silence):
+def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_silence=0):
+    separator = load_separator()
+    
     origin, separated = separator.separate_audio_file(input)
     inst = origin - separated['vocals']
+    
     silence1 = torch.zeros([2, start_silence * separator.samplerate])
     silence2 = torch.zeros([2, end_silence * separator.samplerate])
-    inst = torch.cat((silence1, inst, silence2), dim=-1)
-    demucs.api.save_audio(inst, output, samplerate=separator.samplerate)
-    return output
     
-def work(audiopath, outputpath,separator):
-    model, _ = load_whisper(None)
-    start_silence = 1
+    inst = torch.cat((silence1, inst, silence2), dim=-1)
+    
+    if output_vocals:
+        vocals = torch.cat((silence1, separated['vocals'], silence2), dim=-1)
+        demucs.api.save_audio(vocals, output_vocals, samplerate=separator.samplerate)
+        
+    demucs.api.save_audio(inst, output_inst, samplerate=separator.samplerate)
+    
+def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True):
+    #preload for timing purposes
+    load_separator()
+    load_whisper(None)
+    
+    asspath = replace_ext(audiopath, '.ass')
+    instpath = replace_ext(audiopath, '_inst.mp3')
+    vocalspath = replace_ext(audiopath, '_vocals.mp3') if transcribe_using_vocals else None
+    
     t1 = time.time()
-    result, info = model.transcribe(audiopath, word_timestamps=True)
+    
+    model, _ = load_whisper(None)
+    
+    silence = 1
+    instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence)
+    
+    if transcribe_using_vocals:
+        silence = 0
+        #use vocals only
+        audiopath = vocalspath
+        transcribe_params = {} #dict(vad_filter=True, vad_parameters=vad.VadOptions(speech_pad_ms=50))
+    else:
+        transcribe_params = {}
+    
+    result, info = model.transcribe(audiopath, word_timestamps=True, **transcribe_params)
 
     model, reloaded = load_whisper(info.language)
 
@@ -242,48 +268,35 @@ def work(audiopath, outputpath,separator):
         result, info = model.transcribe(audiopath, word_timestamps=True)
 
     segments = segment(result)
-    assdata = make_ass_swap(segments, offset=start_silence + 0.1)
-    asspath = f'{audiopath}.ass'
-    
-    soundpath = instrumental(separator, audiopath, f'{audiopath}_inst.mp3', start_silence=start_silence, end_silence=start_silence)
+    assdata = make_ass_swap(segments, offset=silence + 0.0)
+ 
     
     open(asspath, 'w', encoding='utf8').write(assdata)
 
     try:
-        process = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', soundpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}', '-vcodec', 'h264', outputpath], capture_output=True)
+        process = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', instpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}', '-vcodec', 'h264', outputpath], capture_output=True)
         if process.returncode != 0:
             raise RuntimeError(f'ffmpeg failed: {process.stderr}')
     finally:
         pass
         #os.remove(asspath)
-        #os.remove(soundpath)
+        #os.remove(instpath)
         
     t2 = time.time()
 
     print(f't: {t2 - t1}')
 
-def short_work(mp3_input,mp4_input,output_path,separator):
-    start_silence = 0
-    soundpath = instrumental(separator, mp3_input, f'{mp3_input}_inst.mp3',
-                             start_silence=start_silence,end_silence=start_silence)
+def remove_vocals_from_video(mp4_input, output_path):
+    instpath = replace_ext(mp4_input, '_inst.mp3')
+    instrumental(mp4_input, instpath)
+    
     try:
-        process = subprocess.run(['ffmpeg', '-i', mp4_input, '-i', soundpath, '-c:v','copy','-map','0:v:0','-map','1:a:0','-shortest', output_path], capture_output=True)
+        process = subprocess.run(['ffmpeg', '-i', mp4_input, '-i', instpath, '-c:v', 'copy', '-map', '0:v:0', '-map', '1:a:0', '-shortest', output_path], capture_output=True)
         if process.returncode != 0:
             raise RuntimeError(f'ffmpeg failed: {process.stderr}')
     finally:
         pass
-        os.remove(soundpath)
-
-def extract_audio_from_mp4(mp4_file):
-    last_dot = mp4_file.rfind('.') if '.' in mp4_file else None
-    mp3out_path = f'{mp4_file[:last_dot]}.mp3'
-    try:
-        process = subprocess.run(['ffmpeg', '-i', mp4_file, '-q:a', '0', '-map', 'a', mp3out_path], capture_output=True)
-        if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.stderr}')
-    finally:
-        pass
-        return mp3out_path
+        os.remove(instpath)
 
 def main(argv):
     parser = argparse.ArgumentParser(
@@ -308,31 +321,22 @@ def main(argv):
         help="Add if its already a lyric video"
     )
     args = parser.parse_args()
-    separator = load_separator()
 
-    if(len(argv) >= 2): # CLI Mode
+    if len(argv) >= 2: # CLI Mode
         input = args.input
 
         if args.output != None:
             output_path = args.output
         else:
-            last_dot = input.rfind('.') if '.' in input else None
-            output_path = f'{input[:last_dot]}.mp4'
+            output_path = replace_ext(input, '.mp4')
 
         if not os.path.isfile(input):  # YT Link
-            mp3_input, title = youtube_to_mp3(input)
-            if args.already_has_lyrics:
-                mp4_input, title = youtube_to_mp4(input)
-        else: # Local File
-            mp3_input = input
-            if args.already_has_lyrics:
-                mp4_input = input
-                mp3_input = extract_audio_from_mp4(input)
+            input, title = youtube_download(input, audio_only=not args.already_has_lyrics)
 
         if args.already_has_lyrics:
-            return short_work(mp3_input,mp4_input,output_path, separator)
+            return remove_vocals_from_video(input, output_path)
         else:
-            return work(mp3_input, output_path, separator)
+            return make_lyrics_video(input, output_path)
 
     st.title("Karaoke Generator")
     input_type = st.radio("Input Type", ["Local File", "YouTube Link"])
@@ -347,13 +351,13 @@ def main(argv):
     else:
         youtube_url = st.text_input("YouTube Link")
         if youtube_url:
-            local_path, title = youtube_to_mp3(youtube_url)
+            local_path, title = youtube_download(youtube_url, audio_only=True)
             print(youtube_url)
             st.success(f"Downloaded YouTube audio: {local_path}")
-    output_path = st.text_input("Output MP4 File Path (Optional)", 'RESULT.mp4')
+    output_path = replace_ext(local_path, '.mp4')
     if st.button("Generate Karaoke Video"):
         with st.spinner('Processing...'):
-            work(local_path, output_path)
+            make_lyrics_video(local_path, output_path)
         st.success("Karaoke video generated!")
         st.video(output_path)
 
