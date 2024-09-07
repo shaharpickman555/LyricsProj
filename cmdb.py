@@ -17,23 +17,24 @@ with warnings.catch_warnings():
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 
-whisper_models = {None: 'large-v3'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
+whisper_models = {None: 'tiny'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
 loaded_model_name = None
 loaded_model = None
 
 def replace_ext(path, ext):
     if '.' not in path:
         return f'{path}{ext}'
-    return f'{path[:path.rfind('.')]}{ext}'
+    return f"{path[:path.rfind('.')]}{ext}"
 
 def youtube_download(url, audio_only=True):
     ext = 'mp3' if audio_only else 'mp4'
     ydl_opts = {
-        'format': 'bestaudio',
+        'format': 'mp4',
         'outtmpl': f'%(id)s.{ext}',
     }
     if audio_only:
         ydl_opts['extract_audio'] = True
+        ydl_opts['format'] = 'bestaudio'
         
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -289,9 +290,11 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True):
 def remove_vocals_from_video(mp4_input, output_path):
     instpath = replace_ext(mp4_input, '_inst.mp3')
     instrumental(mp4_input, instpath)
-    
+    mp4_input_name, mp4_input_ext = os.path.splitext(mp4_input)
+    new_mp4_input = f"{mp4_input_name}-original{mp4_input_ext}"
+    os.rename(mp4_input,new_mp4_input)
     try:
-        process = subprocess.run(['ffmpeg', '-i', mp4_input, '-i', instpath, '-c:v', 'copy', '-map', '0:v:0', '-map', '1:a:0', '-shortest', output_path], capture_output=True)
+        process = subprocess.run(['ffmpeg', '-y', '-i', new_mp4_input, '-i', instpath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0','-shortest', output_path], capture_output=True)
         if process.returncode != 0:
             raise RuntimeError(f'ffmpeg failed: {process.stderr}')
     finally:
@@ -325,13 +328,13 @@ def main(argv):
     if len(argv) >= 2: # CLI Mode
         input = args.input
 
+        if not os.path.isfile(input):  # YT Link
+            input, title = youtube_download(input, audio_only=not args.already_has_lyrics)
+
         if args.output != None:
             output_path = args.output
         else:
             output_path = replace_ext(input, '.mp4')
-
-        if not os.path.isfile(input):  # YT Link
-            input, title = youtube_download(input, audio_only=not args.already_has_lyrics)
 
         if args.already_has_lyrics:
             return remove_vocals_from_video(input, output_path)
