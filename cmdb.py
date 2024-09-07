@@ -368,7 +368,10 @@ def main(argv):
             st.success(f"Downloaded YouTube video: {local_path}")
     if st.button("Generate Karaoke Video"):
         with st.spinner('Processing...'):
-            make_lyrics_video(local_path, output_path)
+            if input_type == 'YouTube Link With Lyrics':
+                remove_vocals_from_video(local_path, output_path)
+            else:
+                make_lyrics_video(local_path, output_path)
         st.success("Karaoke video generated!")
         st.video(output_path)
 
