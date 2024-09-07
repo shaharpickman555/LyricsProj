@@ -17,7 +17,7 @@ with warnings.catch_warnings():
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 
-whisper_models = {None: 'tiny'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
+whisper_models = {None: 'large-v3'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
 loaded_model_name = None
 loaded_model = None
 
@@ -342,22 +342,30 @@ def main(argv):
             return make_lyrics_video(input, output_path)
 
     st.title("Karaoke Generator")
-    input_type = st.radio("Input Type", ["Local File", "YouTube Link"])
+    input_type = st.radio("Input Type", ["Local File", "YouTube Link Without Lyrics", "YouTube Link With Lyrics"])
     if input_type == "Local File":
         uploaded_file = st.file_uploader("Choose an audio file (mp3 or wav)", type=["mp3", "wav"])
         if uploaded_file is not None:
             file = Path(f'./uploads/{uploaded_file.name}')
             local_path = f'./uploads/{uploaded_file.name}'
+            output_path = replace_ext(local_path, '.mp4')
             with open(file, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.success(f"File uploaded: {file}")
-    else:
-        youtube_url = st.text_input("YouTube Link")
+    elif input_type == "YouTube Link Without Lyrics":
+        youtube_url = st.text_input("YouTube Link Without Lyrics")
         if youtube_url:
             local_path, title = youtube_download(youtube_url, audio_only=True)
+            output_path = replace_ext(local_path, '.mp4')
             print(youtube_url)
             st.success(f"Downloaded YouTube audio: {local_path}")
-    output_path = replace_ext(local_path, '.mp4')
+    else:
+        youtube_url = st.text_input("YouTube Link With Lyrics")
+        if youtube_url:
+            local_path, title = youtube_download(youtube_url, audio_only=False)
+            output_path = replace_ext(local_path, '.mp4')
+            print(youtube_url)
+            st.success(f"Downloaded YouTube video: {local_path}")
     if st.button("Generate Karaoke Video"):
         with st.spinner('Processing...'):
             make_lyrics_video(local_path, output_path)
