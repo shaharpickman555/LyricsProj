@@ -1,23 +1,20 @@
 import time, itertools, pprint, subprocess, sys, math, os, collections, re
 import unicodedata
 from pathlib import Path
-from urllib.parse import urlparse
 import argparse
-
 import torch
 from faster_whisper import WhisperModel, vad
+import whisperx
 import demucs.api
 import yt_dlp
 import streamlit as st
-
+from collections import namedtuple
+Word = namedtuple('Word', ['word', 'start', 'end'])
 import warnings
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message="unhashable type: 'list'", category=UserWarning)
-
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-
-
-whisper_models = {None: 'large-v3'}  # 'he': 'ivrit-ai/faster-whisper-v2-d3-e3',
+whisper_models = {None: 'tiny','he': 'ivrit-ai/faster-whisper-v2-d3-e3'}
 loaded_model_name = None
 loaded_model = None
 
@@ -41,13 +38,27 @@ def youtube_download(url, audio_only=True):
         outfile = f'{info["id"]}.{ext}'
     return outfile, info['title']
 
-def load_whisper(lang):
+def whisperX_load(model,audio):
+    result = model.transcribe(audio, batch_size=16, print_progress=True)
+    language = result['language']
+    model_a, metadata = whisperx.load_align_model(language_code=result["language"], device='cpu')
+    return whisperx.align(result["segments"], model_a, metadata, audio, return_char_alignments=False,
+                            device='cpu'), language
+
+def load_model_type(type='faster',model_name='tiny'):
+    if type=='faster':
+        return WhisperModel(model_name, device="auto", compute_type="int8")
+    else: #whisperX
+        return whisperx.load_model(model_name, device="cpu", compute_type="int8", vad_options={"vad_onset": 0.05, "vad_offset": 0.05})
+
+def load_whisper(lang,model_type):
     global loaded_model_name, loaded_model
     model_name = whisper_models.get(lang, whisper_models[None])
     if model_name == loaded_model_name:
         return loaded_model, False
 
-    loaded_model = WhisperModel(model_name, device="auto", compute_type="int8")
+    loaded_model = load_model_type(type=model_type,model_name=model_name)
+
     print(f'loaded {model_name}')
     loaded_model_name = model_name
     return loaded_model, True
@@ -60,9 +71,14 @@ def load_separator():
     loaded_separator = demucs.api.Separator(model='htdemucs')
     return loaded_separator
 
-def segment(result):
-    result = [segment.words for segment in result]
-    
+def segment(result,model_type):
+    if model_type=='faster':
+        result = [segment.words for segment in result]
+    else: #whisperX
+        for i, segment in enumerate(result['segments']):
+            result['segments'][i] = [Word(word=f" {w['word']}", start=w['start'], end=w['end']) for w in segment['words']]
+        result = result['segments']
+
     word_durations = [word.end - word.start for segment in result for word in segment]
     words_per_spoken_second = len(word_durations) / sum(word_durations)
     
@@ -237,10 +253,10 @@ def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_si
         
     demucs.api.save_audio(inst, output_inst, samplerate=separator.samplerate)
     
-def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True):
+def make_lyrics_video(audiopath, outputpath, model_type,transcribe_using_vocals=True):
     #preload for timing purposes
     load_separator()
-    load_whisper(None)
+    load_whisper(None,model_type)
     
     asspath = replace_ext(audiopath, '.ass')
     instpath = replace_ext(audiopath, '_inst.mp3')
@@ -248,7 +264,7 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True):
     
     t1 = time.time()
     
-    model, _ = load_whisper(None)
+    model, _ = load_whisper(None,model_type)
     
     silence = 1
     instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence)
@@ -260,15 +276,22 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True):
         transcribe_params = {} #dict(vad_filter=True, vad_parameters=vad.VadOptions(speech_pad_ms=50))
     else:
         transcribe_params = {}
-    
-    result, info = model.transcribe(audiopath, word_timestamps=True, **transcribe_params)
+    if model_type=='faster':
+        result, info = model.transcribe(audiopath, word_timestamps=True, **transcribe_params)
+        language = info.language
+    else: #whisperX
+        audio = whisperx.load_audio(audiopath)
+        result, language = whisperX_load(model,audio)
 
-    model, reloaded = load_whisper(info.language)
+    model, reloaded = load_whisper(language,model_type)
 
     if reloaded:
-        result, info = model.transcribe(audiopath, word_timestamps=True)
+        if model_type=='x': #whisperX
+            result, language = whisperX_load(model,audio)
+        else: #faster
+            result, info = model.transcribe(audiopath, word_timestamps=True)
 
-    segments = segment(result)
+    segments = segment(result,model_type)
     assdata = make_ass_swap(segments, offset=silence + 0.0)
  
     
@@ -318,10 +341,16 @@ def main(argv):
         help="Your mp4 karaoke song output file"
     )
     parser.add_argument(
-        '-ahs', '--already-has-lyrics',
+        '-ahl', '--already-has-lyrics',
         action='store_true',
         default=False,
-        help="Add if its already a lyric video"
+        help="Add if its already a lyric/Karaoke video"
+    )
+    parser.add_argument(
+        '-t', '--model-type',
+        type=str,
+        default='faster',
+        help="change between faster_whisper (faster) & whisperX (x)"
     )
     args = parser.parse_args()
 
@@ -339,7 +368,7 @@ def main(argv):
         if args.already_has_lyrics:
             return remove_vocals_from_video(input, output_path)
         else:
-            return make_lyrics_video(input, output_path)
+            return make_lyrics_video(input, output_path,args.model_type)
 
     st.title("Karaoke Generator")
     input_type = st.radio("Input Type", ["Local File", "YouTube Link Without Lyrics", "YouTube Link With Lyrics"])
