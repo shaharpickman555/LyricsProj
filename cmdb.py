@@ -86,8 +86,7 @@ def align_audio(transcribe_result):
             loaded_align_model_lang = language
             
         model_result = whisperx.align(model_result['segments'], *loaded_align_model, audio, return_char_alignments=False, device=device_str)
-        
-        return [[Word(word=f' {w['word']}', start=w['start'], end=w['end']) for w in segment['words']] for segment in model_result['segments']]
+        return [[Word(word=f' {w['word']}', start=w['start'], end=w['end']) for w in segment.get('words', segment['word_segments'])] for segment in model_result['segments']]
     else:
         #faster
         result, info = model_result
@@ -307,7 +306,7 @@ def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_si
 
     demucs.api.save_audio(inst, output_inst, samplerate=separator.samplerate)
 
-def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remove_intermediates=False):
+def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remove_intermediates=True):
     asspath = replace_ext(audiopath, '.ass')
     instpath = replace_ext(audiopath, '_inst.mp3')
     vocalspath = replace_ext(audiopath, '_vocals.mp3') if transcribe_using_vocals else None
@@ -402,7 +401,7 @@ def main(argv):
         '-t', '--model-type',
         type=str,
         default='whisperx',
-        help='change between faster_whisper (faster) & whisperX whisperx)'
+        help='change between faster whisper (faster) & whisperX (whisperx)'
     )
     parser.add_argument(
         '-d', '--dont-use-cache',
@@ -423,9 +422,10 @@ def main(argv):
         if not os.path.isfile(input):  # YT Link
             input, title = youtube_download(input, local_upload_dir, audio_only=not args.keep_video)
             
-        input = canonify_input_file(path=input)
+        input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
         generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(original_video=args.keep_video), dont_cache=args.dont_use_cache)
-
+        return
+        
     st.title('Karaoke Generator')
     input_type = st.radio('Input Type', ['Local File', 'YouTube Link Without Lyrics', 'YouTube Link With Lyrics'])
     if input_type == 'Local File':
