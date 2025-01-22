@@ -1,4 +1,5 @@
-import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil
+import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes
+from dataclasses import dataclass
 import unicodedata
 from pathlib import Path
 import argparse
@@ -114,7 +115,7 @@ def replace_ext(path, ext):
         return f'{path}{ext}'
     return f'{path[:path.rfind('.')]}{ext}'
 
-def youtube_download(url, local_dir, audio_only=True):
+def youtube_download(url, local_dir, audio_only=True, dont_cache=False):
     ext = 'mp3' if audio_only else 'mp4'
     ydl_opts = {
         'format': 'mp4',
@@ -127,8 +128,10 @@ def youtube_download(url, local_dir, audio_only=True):
         ydl_opts['format'] = 'bestaudio'
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        info = ydl.extract_info(url, download=dont_cache)
         outfile = os.path.join(local_dir, f'{info['id']}.{ext}')
+        if not os.path.exists(outfile) and not dont_cache:
+            ydl.extract_info(url, download=True)
     return outfile, info['title']
 
 def segment(result):
@@ -358,6 +361,9 @@ def remove_vocals_from_video(mp4_input, output_path):
         pass
         os.remove(instpath)
         
+def passthrough(input, output):
+    shutil.copy(input, output)
+        
 def digest(path=None, content=None):
     return base64.b64encode(hashlib.sha256(open(path, 'rb').read() if path else content).digest()[:15], altchars=b'+-').decode()
 
@@ -370,6 +376,12 @@ def generate_with_cache(f, local_path, selectors, dont_cache=False, **kwargs):
         
     return out_path
     
+def has_cache(local_path, selectors):
+    name = replace_ext(os.path.basename(local_path), '')
+    out_path = os.path.join(local_cache_dir, f'{'_'.join(f'{str(k)}={str(v)}' for k,v in selectors.items())}_{name}.mp4')
+    
+    return os.path.exists(out_path)
+    
 def canonify_input_file(path=None, content=None):
     h = digest(path=path) if path else digest(content=content)
 
@@ -380,6 +392,189 @@ def canonify_input_file(path=None, content=None):
     elif path != canon:
         shutil.move(path, canon)
     return canon
+    
+#########################threading#####################
+
+class StopException(Exception):
+    pass
+    
+@dataclass(frozen=True, eq=False)    
+class Job:
+    tid : int = None
+    path : str = None
+    url : str = None
+    data : bytes = None
+    keep : str = 'nothing'
+    model_type : str = ''
+    no_cache : bool = False
+    
+    def __post_init__(self):
+        if self.keep not in ('nothing', 'video', 'all'):
+            raise ValueError('job.keep must be one of: nothing, video, all')
+            
+        not_nones = int(self.url is not None) + int(self.path is not None) + int(self.data is not None)
+        if not_nones != 1:
+            raise ValueError('must supply: job.url, job.path, job.data')
+            
+        if self.tid is None:
+            object.__setattr__(self, 'tid', generate_tid())
+            
+    def __eq__(self, other):
+        return self.tid == other.tid
+
+def raise_exception_in_thread(thread, e):
+    ctypes.pythonapi.PyThreadState_SetAsyncExc(thread.native_id, ctypes.py_object(e))
+    
+lock = None
+event = None
+worker_thread = None
+should_stop = False
+job_queue = None
+jobs_done = None
+jobs_error = None
+job_done_cb = None
+current_tid = None
+max_job_history = 1000
+default_model_type = 'faster'
+
+def work_loop():
+    global should_stop, job_queue, jobs_done, jobs_error, lock, event, job_done_cb, current_tid
+    try:
+        while not should_stop:
+            job = None
+            with lock:
+                event.clear()
+                if job_queue:
+                    job = job_queue[0]
+                    job_queue = job_queue[1:]
+                    current_tid = job.tid
+                else:
+                    current_tid = None
+            
+            if job is None:
+                event.wait()
+                continue
+                
+            try:
+                output = None
+                
+                #work
+                actions = {'nothing': make_lyrics_video, 'video': remove_vocals_from_video, 'all': passthrough}
+                
+                #TODO cache youtube download?
+                
+                if job.url is not None:
+                    download_path, title = youtube_download(job.url, local_upload_dir, audio_only=job.keep == 'nothing', dont_cache=job.no_cache)
+                    path = canonify_input_file(content=open(download_path, 'rb').read()) #don't delete youtube video file
+                elif job.path is not None:
+                    path = canonify_input_file(path=job.path)
+                else:
+                    path = canonify_input_file(content=job.data)
+                
+                set_model_framework(job.model_type or default_model_type)
+                output = generate_with_cache(actions[job.keep], path, selectors=dict(keep=job.keep), dont_cache=job.no_cache)
+                
+                #TODO remove canon input file?
+                
+                with lock:
+                    current_tid = None
+                    jobs_done.insert(0, job.tid)
+                    jobs_done = jobs_done[:max_job_history]
+            except Exception as e:
+                if isinstance(e, (StopException, KeyboardInterrupt)):
+                    raise
+                    
+                with lock:
+                    current_tid = None
+                    jobs_error.insert(0, job.tid)
+                    jobs_error = jobs_error[:max_job_history]
+                    
+            job_done_cb(job, output)
+    except StopException:
+        pass
+    
+
+
+def init_thread(pop_cb):
+    global worker_thread, job_queue, jobs_done, jobs_error, should_stop, lock, event, job_done_cb, current_tid
+    
+    os.makedirs(local_upload_dir, exist_ok=True)
+    os.makedirs(local_cache_dir, exist_ok=True)
+    
+    stop_thread()
+        
+    should_stop = False
+    lock = threading.Lock()
+    event = threading.Event()
+    job_queue = tuple()
+    jobs_done = list()
+    jobs_error = list()
+    current_tid = None
+    job_done_cb = pop_cb
+    worker_thread = threading.Thread(target=work_loop)
+    worker_thread.start()
+    
+    
+def stop_thread():
+    global worker_thread, should_stop, event
+    
+    if worker_thread is not None:
+        should_stop = True
+        event.set()
+        raise_exception_in_thread(worker_thread, StopException)
+        worker_thread.join()
+        worker_thread = None
+    
+def job_status(job):
+    global job_queue, jobs_done, jobs_error, lock, current_tid
+    with lock:
+        is_done = job.tid in jobs_done
+        is_error = job.tid in jobs_error
+        if is_done:
+            return 'done'
+        if is_error:
+            return 'error'
+        if job.tid == current_tid:
+            return 'processing'
+        if job in job_queue:
+            return 'queue'
+    return 'unknown'
+
+tid_counter = 0
+def generate_tid():
+    global tid_counter
+    tid_counter += 1
+    return tid_counter
+    
+def set_queue(jobs : list[Job]):
+    global lock, event, job_queue, jobs_done, jobs_error
+    
+    with lock:
+        job_queue = tuple(j for j in jobs if j.tid not in jobs_done and j.tid not in jobs_error)
+        event.set()
+        
+
+def thread_test():
+    init_thread(lambda job, path: print(f'{job.tid} is available at {path} ({job_status(job)})'))
+    
+    job1 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E')
+    job2 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E', keep='video')
+    job3 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E', keep='all')
+    
+    print(job_status(job1), job_status(job2), job_status(job3))
+    
+    set_queue([job1, job2, job3])
+    
+    print(job_status(job1), job_status(job2), job_status(job3))
+    
+    try:
+        while True:
+            print(job_status(job1), job_status(job2), job_status(job3))
+            time.sleep(1)
+    finally:
+        stop_thread()
+        
+#####################################################################################
 
 def main(argv):
     parser = argparse.ArgumentParser(
@@ -423,7 +618,7 @@ def main(argv):
             input, title = youtube_download(input, local_upload_dir, audio_only=not args.keep_video)
             
         input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
-        generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(original_video=args.keep_video), dont_cache=args.dont_use_cache)
+        generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(keep='video' if args.keep_video else 'nothing'), dont_cache=args.dont_use_cache)
         return
         
     st.title('Karaoke Generator')
@@ -444,11 +639,12 @@ def main(argv):
     if st.button('Generate Karaoke Video'):
         with st.spinner('Processing...'):
             if input_type == 'YouTube Link With Lyrics':
-                output = generate_with_cache(remove_vocals_from_video, input, selectors=dict(original_video=True), dont_cache=False)
+                output = generate_with_cache(remove_vocals_from_video, input, selectors=dict(keep='video'), dont_cache=False)
             else:
-                output = generate_with_cache(make_lyrics_video, input, selectors=dict(original_video=False), dont_cache=False)
+                output = generate_with_cache(make_lyrics_video, input, selectors=dict(keep='nothing'), dont_cache=False)
         st.success('Karaoke video generated!')
         st.video(output)
 
 if __name__ == '__main__':
-    main(sys.argv)
+    #main(sys.argv)
+    thread_test()
