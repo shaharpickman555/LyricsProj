@@ -431,6 +431,7 @@ worker_thread = None
 should_stop = False
 job_queue = None
 jobs_done = None
+jobs_done_paths = None
 jobs_error = None
 job_done_cb = None
 current_tid = None
@@ -438,7 +439,7 @@ max_job_history = 1000
 default_model_type = 'faster'
 
 def work_loop():
-    global should_stop, job_queue, jobs_done, jobs_error, lock, event, job_done_cb, current_tid
+    global should_stop, job_queue, jobs_done, jobs_done_paths, jobs_error, lock, event, job_done_cb, current_tid
     try:
         while not should_stop:
             job = None
@@ -479,6 +480,9 @@ def work_loop():
                 with lock:
                     current_tid = None
                     jobs_done.insert(0, job.tid)
+                    jobs_done_paths[job.tid] = output
+                    for t in jobs_done[max_job_history:]:
+                        jobs_done_paths.pop(t, None)
                     jobs_done = jobs_done[:max_job_history]
             except Exception as e:
                 if isinstance(e, (StopException, KeyboardInterrupt)):
@@ -496,7 +500,7 @@ def work_loop():
 
 
 def init_thread(pop_cb):
-    global worker_thread, job_queue, jobs_done, jobs_error, should_stop, lock, event, job_done_cb, current_tid
+    global worker_thread, job_queue, jobs_done, jobs_done_paths, jobs_error, should_stop, lock, event, job_done_cb, current_tid
     
     os.makedirs(local_upload_dir, exist_ok=True)
     os.makedirs(local_cache_dir, exist_ok=True)
@@ -508,6 +512,7 @@ def init_thread(pop_cb):
     event = threading.Event()
     job_queue = tuple()
     jobs_done = list()
+    jobs_done_paths = dict()
     jobs_error = list()
     current_tid = None
     job_done_cb = pop_cb
@@ -531,14 +536,14 @@ def job_status(job):
         is_done = job.tid in jobs_done
         is_error = job.tid in jobs_error
         if is_done:
-            return 'done'
+            return 'done', jobs_done_paths[job.tid]
         if is_error:
-            return 'error'
+            return 'error', None
         if job.tid == current_tid:
-            return 'processing'
+            return 'processing', None
         if job in job_queue:
-            return 'queue'
-    return 'unknown'
+            return 'queue', None
+    return 'unknown', None
 
 tid_counter = 0
 def generate_tid():
@@ -566,7 +571,7 @@ def thread_test():
     set_queue([job1, job2, job3])
     
     print(job_status(job1), job_status(job2), job_status(job3))
-    
+
     try:
         while True:
             print(job_status(job1), job_status(job2), job_status(job3))
