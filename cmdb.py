@@ -1,4 +1,4 @@
-import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes
+import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes, traceback
 from dataclasses import dataclass
 import unicodedata
 from pathlib import Path
@@ -484,6 +484,8 @@ def work_loop():
                     for t in jobs_done[max_job_history:]:
                         jobs_done_paths.pop(t, None)
                     jobs_done = jobs_done[:max_job_history]
+                    
+                job_done_cb(job, output, None)
             except Exception as e:
                 if isinstance(e, (StopException, KeyboardInterrupt)):
                     raise
@@ -493,7 +495,8 @@ def work_loop():
                     jobs_error.insert(0, job.tid)
                     jobs_error = jobs_error[:max_job_history]
                     
-            job_done_cb(job, output)
+
+                job_done_cb(job, None, e)
     except StopException:
         pass
     
@@ -560,21 +563,24 @@ def set_queue(jobs : list[Job]):
         
 
 def thread_test():
-    init_thread(lambda job, path: print(f'{job.tid} is available at {path} ({job_status(job)})'))
+    def cb(job, path, error):
+        if error:
+            print(f'{job.tid} error: ', traceback.format_exc(error))
+        else:
+            print(f'{job.tid} is available at {path} ({job_status(job)})')
+            
+    init_thread(cb)
     
+    job4 = Job(path=r'C:\projects\pick\LyricsProj\songs\allstar.wav')
     job1 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E')
     job2 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E', keep='video')
     job3 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E', keep='all')
     
-    print(job_status(job1), job_status(job2), job_status(job3))
-    
-    set_queue([job1, job2, job3])
-    
-    print(job_status(job1), job_status(job2), job_status(job3))
+    set_queue([job4, job1, job2, job3])
 
     try:
         while True:
-            print(job_status(job1), job_status(job2), job_status(job3))
+            print(job_status(job4), job_status(job1), job_status(job2), job_status(job3))
             time.sleep(1)
     finally:
         stop_thread()
