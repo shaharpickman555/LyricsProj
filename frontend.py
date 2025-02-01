@@ -21,6 +21,71 @@ def on_connect():
     print("Client connected.")
     emit('update_songs', [song.to_dict() for song in song_playlist])
 
+
+@socketio.on('client_add_song')
+def on_client_add_song(data):
+    """
+    data = { "title": "User typed name" }
+    Add a new song with random TID or next_tid, initial state = 'queue'
+    Broadcast the updated playlist to all.
+    """
+    global next_tid
+    title = data.get("title", "Untitled Song")
+    new_tid = next_tid
+    next_tid += 1
+
+    # For simplicity, the path can be a placeholder
+    new_song = Song(new_tid, f"songs/{new_tid}.mp4", title, 'queue')
+    song_playlist.append(new_song)
+
+    print(f"Added new song tid={new_tid}: {title}")
+    socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
+
+@socketio.on('client_remove_song')
+def on_client_remove_song(data):
+    """
+    data = { "tid": some_tid }
+    Remove the song with the given TID from the playlist,
+    and broadcast the updated playlist.
+    """
+    tid = data.get("tid")
+    if tid is None:
+        return
+
+    # Find the song by TID and remove it if found
+    for i, song in enumerate(song_playlist):
+        if song.tid == tid:
+            removed = song_playlist.pop(i)
+            print(f"Removed song tid={removed.tid}: {removed.title}")
+            break
+
+    # Broadcast updates to all clients
+    socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
+
+
+@socketio.on('client_reorder')
+def on_client_reorder(data):
+    """
+    data = { "oldIndex": int, "newIndex": int }
+    Reorder the playlist by moving the song from oldIndex to newIndex.
+    Then broadcast the updated playlist.
+    """
+    old_index = data.get("oldIndex")
+    new_index = data.get("newIndex")
+
+    if (old_index is not None
+            and new_index is not None
+            and 0 <= old_index < len(song_playlist)
+            and 0 <= new_index < len(song_playlist)):
+        # Extract the item
+        song = song_playlist.pop(old_index)
+        # Insert at new position
+        song_playlist.insert(new_index, song)
+        print(f"Reordered: Moved {song.title} from {old_index} -> {new_index}")
+
+        socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
+
+
 def random_playlist_modification(playlist):
     """Randomly modify the global playlist: add, remove, reorder, or change state."""
     global next_tid
@@ -65,6 +130,7 @@ def background_updater():
     while True:
         time.sleep(5)
         random_playlist_modification(song_playlist)
+        print(song_playlist)
         socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
 if __name__ == "__main__":
     thread = threading.Thread(target=background_updater, daemon=True)

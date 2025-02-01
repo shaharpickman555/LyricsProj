@@ -2,74 +2,193 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title><!-- index.html -->
+    <title><!-- templates/index.html -->
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Song List</title>
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <meta charset="utf-8">
+    <title>Song List</title>
+
+    <!-- Include Socket.IO client library -->
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .song-input {
+            font-size: 14px;
+            padding: 5px;
+        }
+        .add-button {
+            font-size: 14px;
+            padding: 5px 10px;
+            margin-left: 5px;
+            cursor: pointer;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+            max-width: 600px;
+        }
+        li {
+            background-color: #f5f5f5;
+            margin: 5px 0;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-radius: 4px;
+        }
+        .song-info {
+            display: flex;
+            align-items: center;
+        }
+        .song-title {
+            font-weight: bold;
+        }
+        .song-icon {
+            margin-left: 10px;
+            font-size: 18px;
+        }
+        .action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .arrow-btn, .remove-btn {
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 5px;
+            border: none;
+            background-color: #eee;
+            border-radius: 3px;
+        }
+        .arrow-btn:hover, .remove-btn:hover {
+            background-color: #ddd;
+        }
+    </style>
 </head>
 <body>
-  <h1>Song List</h1>
-  <ul id="song-list"></ul>
-  <script>
+    <h1>Song List</h1>
+
+    <div class="controls">
+        <input type="text" id="song-title-input" class="song-input" placeholder="Enter new song title..." />
+        <button id="add-song-btn" class="add-button">Add Song</button>
+    </div>
+
+    <ul id="song-list"></ul>
+
+    <script>
     document.addEventListener("DOMContentLoaded", () => {
-      const socket = io();
+        const socket = io();
 
-      // Just for debug
-      socket.on("connect", () => {
-        console.log("Connected to Socket.IO");
-      });
-
-      // Listen for the 'update_songs' event
-      socket.on('update_songs', (songs) => {
-        console.log("Received songs:", songs);
-        const songList = document.getElementById("song-list");
-        songList.innerHTML = "";  // Clear old list
-
-        songs.forEach(song => {
-          // Create list item
-          const li = document.createElement('li');
-          li.style.margin = "10px 0"; // Just some spacing
-
-          // Song title
-          const titleSpan = document.createElement('span');
-          titleSpan.textContent = song.title;
-
-          // Icon next to the title
-          const iconSpan = document.createElement('span');
-          iconSpan.style.marginLeft = "10px"; // space between text and icon
-
-          // Choose icon based on the state
-          switch (song.state) {
-            case 'queue':
-              iconSpan.textContent = '⏳'; // hourglass
-              break;
-            case 'processing':
-              iconSpan.textContent = '🔄'; // circular arrows
-              break;
-            case 'done':
-              iconSpan.textContent = '✅'; // check mark
-              break;
-            case 'error':
-              iconSpan.textContent = '❌'; // cross
-              break;
-            default:
-              iconSpan.textContent = '❓'; // question mark, fallback
-              break;
-          }
-
-          // Attach to the <li>
-          li.appendChild(titleSpan);
-          li.appendChild(iconSpan);
-
-          // Finally append to the <ul>
-          songList.appendChild(li);
+        socket.on('connect', () => {
+            console.log("Connected to Socket.IO server");
         });
-      });
+
+        // Listen for updated playlists from the server
+        socket.on('update_songs', (songs) => {
+            console.log("Received updated playlist:", songs);
+            const songList = document.getElementById('song-list');
+            songList.innerHTML = '';  // clear old list
+
+            songs.forEach((song, index) => {
+                const li = document.createElement('li');
+
+                // Left side: Song title + icon
+                const infoDiv = document.createElement('div');
+                infoDiv.classList.add('song-info');
+
+                const titleSpan = document.createElement('span');
+                titleSpan.classList.add('song-title');
+                titleSpan.textContent = song.title;
+
+                const iconSpan = document.createElement('span');
+                iconSpan.classList.add('song-icon');
+                switch (song.state) {
+                    case 'queue':
+                        iconSpan.textContent = '⏳';  // hourglass
+                        break;
+                    case 'processing':
+                        iconSpan.textContent = '🔄';  // rotating arrows
+                        break;
+                    case 'done':
+                        iconSpan.textContent = '✅';  // check mark
+                        break;
+                    case 'error':
+                        iconSpan.textContent = '❌';  // X mark
+                        break;
+                    default:
+                        iconSpan.textContent = '❓';  // fallback
+                }
+
+                infoDiv.appendChild(titleSpan);
+                infoDiv.appendChild(iconSpan);
+
+                // Right side: reorder + remove
+                const actionDiv = document.createElement('div');
+                actionDiv.classList.add('action-buttons');
+
+                // Up/Down buttons
+                const upBtn = document.createElement('button');
+                upBtn.innerHTML = '↑';
+                upBtn.classList.add('arrow-btn');
+
+                const downBtn = document.createElement('button');
+                downBtn.innerHTML = '↓';
+                downBtn.classList.add('arrow-btn');
+
+                upBtn.addEventListener('click', () => {
+                    if (index > 0) {
+                        socket.emit('client_reorder', { oldIndex: index, newIndex: index - 1 });
+                    }
+                });
+
+                downBtn.addEventListener('click', () => {
+                    if (index < songs.length - 1) {
+                        socket.emit('client_reorder', { oldIndex: index, newIndex: index + 1 });
+                    }
+                });
+
+                // Remove button
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'Remove';
+                removeBtn.classList.add('remove-btn');
+                removeBtn.addEventListener('click', () => {
+                    socket.emit('client_remove_song', { tid: song.tid });
+                });
+
+                actionDiv.appendChild(upBtn);
+                actionDiv.appendChild(downBtn);
+                actionDiv.appendChild(removeBtn);
+
+                li.appendChild(infoDiv);
+                li.appendChild(actionDiv);
+                songList.appendChild(li);
+            });
+        });
+
+        // "Add Song" button
+        const addSongBtn = document.getElementById('add-song-btn');
+        const songTitleInput = document.getElementById('song-title-input');
+
+        addSongBtn.addEventListener('click', () => {
+            const title = songTitleInput.value.trim();
+            if (title) {
+                socket.emit('client_add_song', { title: title });
+                songTitleInput.value = '';
+            }
+        });
     });
-  </script>
+    </script>
 </body>
 </html>
 </title>
