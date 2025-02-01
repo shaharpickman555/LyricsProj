@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title><!-- index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Song List</title>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+  <h1>Song List</h1>
+  <ul id="song-list"></ul>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const socket = io();
+
+      // Just for debug
+      socket.on("connect", () => {
+        console.log("Connected to Socket.IO");
+      });
+
+      // Listen for the 'update_songs' event
+      socket.on('update_songs', (songs) => {
+        console.log("Received songs:", songs);
+        const songList = document.getElementById("song-list");
+        songList.innerHTML = "";  // Clear old list
+
+        songs.forEach(song => {
+          // Create list item
+          const li = document.createElement('li');
+          li.style.margin = "10px 0"; // Just some spacing
+
+          // Song title
+          const titleSpan = document.createElement('span');
+          titleSpan.textContent = song.title;
+
+          // Icon next to the title
+          const iconSpan = document.createElement('span');
+          iconSpan.style.marginLeft = "10px"; // space between text and icon
+
+          // Choose icon based on the state
+          switch (song.state) {
+            case 'queue':
+              iconSpan.textContent = '⏳'; // hourglass
+              break;
+            case 'processing':
+              iconSpan.textContent = '🔄'; // circular arrows
+              break;
+            case 'done':
+              iconSpan.textContent = '✅'; // check mark
+              break;
+            case 'error':
+              iconSpan.textContent = '❌'; // cross
+              break;
+            default:
+              iconSpan.textContent = '❓'; // question mark, fallback
+              break;
+          }
+
+          // Attach to the <li>
+          li.appendChild(titleSpan);
+          li.appendChild(iconSpan);
+
+          // Finally append to the <ul>
+          songList.appendChild(li);
+        });
+      });
+    });
+  </script>
+</body>
+</html>
+</title>
+</head>
+<body>
+
+</body>
+</html>

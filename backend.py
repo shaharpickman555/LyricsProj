@@ -12,6 +12,9 @@ import streamlit as st
 from collections import namedtuple
 import torch
 
+def extract_filename(file_path):
+    return os.path.splitext(os.path.basename(file_path))[0]
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 has_juice = torch.cuda.device_count() > 0
@@ -19,6 +22,9 @@ device_str = 'cuda' if has_juice else 'cpu'
 model_size_str = 'large-v3' if has_juice else 'tiny'
 
 Word = namedtuple('Word', ['word', 'start', 'end'])
+
+def get_filename(path):
+    return os.path.splitext(os.path.basename(path))[0]
 
 whisper_model_frameworks = {
                     'faster':
@@ -398,7 +404,7 @@ def canonify_input_file(path=None, content=None):
 class StopException(Exception):
     pass
     
-@dataclass(frozen=True, eq=False)    
+@dataclass(frozen=True, eq=False)
 class Job:
     tid : int = None
     path : str = None
@@ -407,6 +413,7 @@ class Job:
     keep : str = 'nothing'
     model_type : str = ''
     no_cache : bool = False
+    title : str = None
     
     def __post_init__(self):
         if self.keep not in ('nothing', 'video', 'all'):
@@ -432,6 +439,7 @@ should_stop = False
 job_queue = None
 jobs_done = None
 jobs_done_paths = None
+jobs_done_titles = None
 jobs_error = None
 job_done_cb = None
 current_tid = None
@@ -439,7 +447,7 @@ max_job_history = 1000
 default_model_type = 'faster'
 
 def work_loop():
-    global should_stop, job_queue, jobs_done, jobs_done_paths, jobs_error, lock, event, job_done_cb, current_tid
+    global should_stop, job_queue, jobs_done, jobs_done_paths, jobs_done_titles, jobs_error, lock, event, job_done_cb, current_tid
     try:
         while not should_stop:
             job = None
@@ -469,6 +477,7 @@ def work_loop():
                     path = canonify_input_file(content=open(download_path, 'rb').read()) #don't delete youtube video file
                 elif job.path is not None:
                     path = canonify_input_file(path=job.path)
+                    title = get_filename(path)
                 else:
                     path = canonify_input_file(content=job.data)
                 
@@ -481,8 +490,10 @@ def work_loop():
                     current_tid = None
                     jobs_done.insert(0, job.tid)
                     jobs_done_paths[job.tid] = output
+                    jobs_done_titles[job.tid] = title
                     for t in jobs_done[max_job_history:]:
                         jobs_done_paths.pop(t, None)
+                        jobs_done.pop(t, None)
                     jobs_done = jobs_done[:max_job_history]
                     
                 job_done_cb(job, output, None)
@@ -503,7 +514,7 @@ def work_loop():
 
 
 def init_thread(pop_cb):
-    global worker_thread, job_queue, jobs_done, jobs_done_paths, jobs_error, should_stop, lock, event, job_done_cb, current_tid
+    global worker_thread, job_queue, jobs_done, jobs_done_paths, jobs_done_titles, jobs_error, should_stop, lock, event, job_done_cb, current_tid
     
     os.makedirs(local_upload_dir, exist_ok=True)
     os.makedirs(local_cache_dir, exist_ok=True)
@@ -516,6 +527,7 @@ def init_thread(pop_cb):
     job_queue = tuple()
     jobs_done = list()
     jobs_done_paths = dict()
+    jobs_done_titles = dict()
     jobs_error = list()
     current_tid = None
     job_done_cb = pop_cb
@@ -532,14 +544,14 @@ def stop_thread():
         raise_exception_in_thread(worker_thread, StopException)
         worker_thread.join()
         worker_thread = None
-    
+
 def job_status(job):
     global job_queue, jobs_done, jobs_error, lock, current_tid
     with lock:
         is_done = job.tid in jobs_done
         is_error = job.tid in jobs_error
         if is_done:
-            return 'done', jobs_done_paths[job.tid]
+            return 'done', jobs_done_paths[job.tid], jobs_done_titles[job.tid]
         if is_error:
             return 'error', None
         if job.tid == current_tid:
@@ -560,7 +572,35 @@ def set_queue(jobs : list[Job]):
     with lock:
         job_queue = tuple(j for j in jobs if j.tid not in jobs_done and j.tid not in jobs_error)
         event.set()
-        
+
+@dataclass
+class Song:
+    tid: int
+    path: str
+    title: str
+    state: str
+
+    def __post_init__(self):
+        self.path = self.path if self.path is not None else ""
+        self.title = self.title if self.title is not None else ""
+        self.state = self.state if self.state is not None else ""
+
+    def to_dict(self):
+        return {
+            "tid": self.tid,
+            "path": self.path,
+            "title": self.title,
+            "state": self.state
+        }
+
+def get_ui_playlist(jobs):
+    return [Song(
+        job.tid,
+        jobs_done_paths.get(job.tid, "") or "",
+        jobs_done_titles.get(job.tid, "") or "",
+        job_status(job)[0]
+    ) for job in jobs]
+
 
 def thread_test():
     def cb(job, path, error):
@@ -570,17 +610,17 @@ def thread_test():
             print(f'{job.tid} is available at {path} ({job_status(job)})')
             
     init_thread(cb)
-    
-    job4 = Job(path=r'C:\projects\pick\LyricsProj\songs\allstar.wav')
+    # job4 = Job(path=r'C:\projects\pick\LyricsProj\songs\allstar.wav')
     job1 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E')
     job2 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E', keep='video')
     job3 = Job(url='https://www.youtube.com/watch?v=L_jWHffIx5E', keep='all')
-    
-    set_queue([job4, job1, job2, job3])
+    jobs = [job1, job2, job3]
+
+    set_queue(jobs)
 
     try:
         while True:
-            print(job_status(job4), job_status(job1), job_status(job2), job_status(job3))
+            print(get_ui_playlist(jobs))
             time.sleep(1)
     finally:
         stop_thread()
