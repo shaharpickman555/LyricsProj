@@ -39,11 +39,17 @@ def _song_to_dict_plus_playing(song):
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
-next_tid = 4
+next_tid = 10
 currently_playing_tid = None
 song_playlist = [Song(tid=1, path='keep=video_89eusrJpdJACDWxhAxzG.mp4', title='Song1',state='done'),
                  Song(tid=2, path='keep=nothing_-7MEND5qWR1AliwI6mIs.mp4', title='Song2', state='done'),
-                 Song(tid=3, path='keep=all_89eusrJpdJACDWxhAxzG.mp4', title='Song3', state='done')]
+                 Song(tid=3, path='keep=all_89eusrJpdJACDWxhAxzG.mp4', title='Song3', state='done'),
+                 Song(tid=4, path='big.mp4', title='Song4', state='done'),
+                 Song(tid=5, path='H1.mp4', title='Song5', state='done'),
+                 Song(tid=6, path='H11.mp4', title='Song6', state='done'),
+                 Song(tid=7, path='H2.mp4', title='Song7', state='done'),
+                 Song(tid=8, path='H22.mp4', title='Song8', state='done'),
+                 Song(tid=9, path='Q.mp4', title='Song9', state='done')]
 @app.route("/")
 def index():
     return render_template("index.html")
