@@ -1,34 +1,111 @@
+import os
 import string
 
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for, request, send_from_directory
 from flask_socketio import SocketIO, emit
 from backend import Song
 import threading
 import time, random
+
+def _get_song_by_tid(tid):
+    """Return the Song object matching the TID, or None if not found."""
+    for s in song_playlist:
+        if s.tid == tid:
+            return s
+    return None
+
+def _get_first_done_song():
+    """Return the first Song in the playlist with state='done', or None if none exist."""
+    for s in song_playlist:
+        if s.state == 'done':
+            return s
+    return None
+
+def _remove_song_by_tid(tid):
+    """Remove and return the Song from the playlist if found, else None."""
+    for i, s in enumerate(song_playlist):
+        if s.tid == tid:
+            return song_playlist.pop(i)
+    return None
+
+def _song_to_dict_plus_playing(song):
+    """
+    Convert the song to a dictionary, plus add 'is_playing' if
+    it is the global currently_playing_tid.
+    """
+    d = song.to_dict()
+    d["is_playing"] = (song.tid == currently_playing_tid)
+    return d
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 next_tid = 4
-song_playlist = [Song(tid=1, path='songs/keep=nothing_-7MEND5qWR1AliwI6mIs.mp4', title='Song1',state='processing'),
-                 Song(tid=2, path='songs/keep=video_89eusrJpdJACDWxhAxzG.mp4', title='Song2', state='queue'),
-                 Song(tid=3, path='songs/keep=all_89eusrJpdJACDWxhAxzG.mp4', title='Song3', state='done')]
+currently_playing_tid = None
+song_playlist = [Song(tid=1, path='keep=video_89eusrJpdJACDWxhAxzG.mp4', title='Song1',state='done'),
+                 Song(tid=2, path='keep=nothing_-7MEND5qWR1AliwI6mIs.mp4', title='Song2', state='done'),
+                 Song(tid=3, path='keep=all_89eusrJpdJACDWxhAxzG.mp4', title='Song3', state='done')]
 @app.route("/")
 def index():
     return render_template("index.html")
 
+@app.route("/player", methods=["GET"])
+def player():
+    global currently_playing_tid
+
+    # If there's no currently playing song or it no longer exists in the playlist, pick a new one
+    if not _get_song_by_tid(currently_playing_tid) or currently_playing_tid is None:
+        # Try to pick the first "done" song
+        done_song = _get_first_done_song()
+        if done_song is not None:
+            currently_playing_tid = done_song.tid
+        else:
+            currently_playing_tid = None
+        # Find the actual Song object for the currently playing TID
+    playing_song = _get_song_by_tid(currently_playing_tid)
+    print("########")
+    print(playing_song)
+    print(playing_song.path)
+    print("########")
+    return render_template("player.html", song=playing_song)
+
+@app.route("/player/next", methods=["POST"])
+def player_next():
+    """
+    "Next Song" button handler:
+    - Remove the currently playing song from the playlist.
+    - Find the next available "done" song, set it as currently playing.
+    - Redirect back to /player.
+    """
+    global currently_playing_tid
+    playing_song = _get_song_by_tid(currently_playing_tid)
+
+    # 1) Remove the old song if it exists
+    if playing_song:
+        _remove_song_by_tid(playing_song.tid)
+
+    # 2) Pick the next "done" song, if any
+    next_song = _get_first_done_song()
+    currently_playing_tid = next_song.tid if next_song else None
+
+    # Notify all connected sockets that the playlist changed
+    socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
+
+    return redirect(url_for('player'))
+
+@app.route("/songs/<path:filename>")
+def serve_song_file(filename):
+    """Serve a file from the songs folder."""
+    songs_dir = os.path.join(os.path.dirname(__file__), "songs")
+    return send_from_directory(songs_dir, filename)
+
 @socketio.on('connect')
 def on_connect():
     print("Client connected.")
-    emit('update_songs', [song.to_dict() for song in song_playlist])
+    emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
 
 
 @socketio.on('client_add_song')
 def on_client_add_song(data):
-    """
-    data = { "title": "User typed name" }
-    Add a new song with random TID or next_tid, initial state = 'queue'
-    Broadcast the updated playlist to all.
-    """
     global next_tid
     title = data.get("title", "Untitled Song")
     new_tid = next_tid
@@ -39,7 +116,7 @@ def on_client_add_song(data):
     song_playlist.append(new_song)
 
     print(f"Added new song tid={new_tid}: {title}")
-    socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
+    socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
 
 @socketio.on('client_remove_song')
 def on_client_remove_song(data):
@@ -60,7 +137,7 @@ def on_client_remove_song(data):
             break
 
     # Broadcast updates to all clients
-    socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
+    socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
 
 
 @socketio.on('client_reorder')
@@ -83,7 +160,7 @@ def on_client_reorder(data):
         song_playlist.insert(new_index, song)
         print(f"Reordered: Moved {song.title} from {old_index} -> {new_index}")
 
-        socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
+        socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
 
 
 def random_playlist_modification(playlist):
@@ -128,10 +205,10 @@ def random_playlist_modification(playlist):
 
 def background_updater():
     while True:
-        time.sleep(5)
-        random_playlist_modification(song_playlist)
+        time.sleep(7)
+        # random_playlist_modification(song_playlist)
         print(song_playlist)
-        socketio.emit('update_songs', [s.to_dict() for s in song_playlist])
+        socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
 if __name__ == "__main__":
     thread = threading.Thread(target=background_updater, daemon=True)
     thread.start()

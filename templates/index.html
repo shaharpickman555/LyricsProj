@@ -8,10 +8,7 @@
 <head>
     <meta charset="utf-8">
     <title>Song List</title>
-
-    <!-- Include Socket.IO client library -->
     <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -58,6 +55,11 @@
             margin-left: 10px;
             font-size: 18px;
         }
+        .now-playing-icon {
+            margin-left: 10px;
+            font-size: 18px;
+            color: green;
+        }
         .action-buttons {
             display: flex;
             align-items: center;
@@ -94,16 +96,15 @@
             console.log("Connected to Socket.IO server");
         });
 
-        // Listen for updated playlists from the server
         socket.on('update_songs', (songs) => {
             console.log("Received updated playlist:", songs);
             const songList = document.getElementById('song-list');
-            songList.innerHTML = '';  // clear old list
+            songList.innerHTML = '';
 
             songs.forEach((song, index) => {
                 const li = document.createElement('li');
 
-                // Left side: Song title + icon
+                // Left side: Title + State Icon + (Optional) "Now Playing"
                 const infoDiv = document.createElement('div');
                 infoDiv.classList.add('song-info');
 
@@ -114,30 +115,29 @@
                 const iconSpan = document.createElement('span');
                 iconSpan.classList.add('song-icon');
                 switch (song.state) {
-                    case 'queue':
-                        iconSpan.textContent = '⏳';  // hourglass
-                        break;
-                    case 'processing':
-                        iconSpan.textContent = '🔄';  // rotating arrows
-                        break;
-                    case 'done':
-                        iconSpan.textContent = '✅';  // check mark
-                        break;
-                    case 'error':
-                        iconSpan.textContent = '❌';  // X mark
-                        break;
-                    default:
-                        iconSpan.textContent = '❓';  // fallback
+                    case 'queue':       iconSpan.textContent = '⏳'; break;
+                    case 'processing':  iconSpan.textContent = '🔄'; break;
+                    case 'done':        iconSpan.textContent = '✅'; break;
+                    case 'error':       iconSpan.textContent = '❌'; break;
+                    default:            iconSpan.textContent = '❓'; break;
                 }
 
                 infoDiv.appendChild(titleSpan);
                 infoDiv.appendChild(iconSpan);
 
+                // Show "now_playing" icon if is_playing == true
+                if (song.is_playing) {
+                    const nowPlayingSpan = document.createElement('span');
+                    nowPlayingSpan.classList.add('now-playing-icon');
+                    nowPlayingSpan.textContent = '🔊'; // or use "Now Playing" text
+                    infoDiv.appendChild(nowPlayingSpan);
+                }
+
                 // Right side: reorder + remove
                 const actionDiv = document.createElement('div');
                 actionDiv.classList.add('action-buttons');
 
-                // Up/Down buttons
+                // Up/Down
                 const upBtn = document.createElement('button');
                 upBtn.innerHTML = '↑';
                 upBtn.classList.add('arrow-btn');
@@ -151,14 +151,13 @@
                         socket.emit('client_reorder', { oldIndex: index, newIndex: index - 1 });
                     }
                 });
-
                 downBtn.addEventListener('click', () => {
                     if (index < songs.length - 1) {
                         socket.emit('client_reorder', { oldIndex: index, newIndex: index + 1 });
                     }
                 });
 
-                // Remove button
+                // Remove
                 const removeBtn = document.createElement('button');
                 removeBtn.textContent = 'Remove';
                 removeBtn.classList.add('remove-btn');
