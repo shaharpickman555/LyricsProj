@@ -148,25 +148,23 @@ def on_client_remove_song(data):
 
 @socketio.on('client_reorder')
 def on_client_reorder(data):
-    """
-    data = { "oldIndex": int, "newIndex": int }
-    Reorder the playlist by moving the song from oldIndex to newIndex.
-    Then broadcast the updated playlist.
-    """
     old_index = data.get("oldIndex")
     new_index = data.get("newIndex")
 
-    if (old_index is not None
-            and new_index is not None
-            and 0 <= old_index < len(song_playlist)
-            and 0 <= new_index < len(song_playlist)):
-        # Extract the item
+    # Safety check: if the top item is currently playing, don't let a user reorder above it
+    if new_index == 0:
+        top_song = song_playlist[0]
+        if top_song.tid == currently_playing_tid:
+            print("Attempted to reorder above the now-playing song. Ignoring.")
+            return  # Do nothing
+
+    # Continue with your normal reorder logic
+    if 0 <= old_index < len(song_playlist) and 0 <= new_index < len(song_playlist):
         song = song_playlist.pop(old_index)
-        # Insert at new position
         song_playlist.insert(new_index, song)
         print(f"Reordered: Moved {song.title} from {old_index} -> {new_index}")
-
         socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
+
 
 
 def random_playlist_modification(playlist):
