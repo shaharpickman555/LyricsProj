@@ -1,11 +1,17 @@
 import os
 import string
-
 from flask import Flask, render_template, redirect, url_for, request, send_from_directory
 from flask_socketio import SocketIO, emit
-from backend import Song
+from backend import Song, thread_test, init_thread
 import threading
 import time, random
+from werkzeug.utils import secure_filename
+
+ALLOWED_EXTENSIONS = {'mp4', 'mp3', 'wav', 'ogg', 'm4a'}
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def _get_song_by_tid(tid):
     """Return the Song object matching the TID, or None if not found."""
@@ -42,10 +48,10 @@ socketio = SocketIO(app)
 next_tid = 10
 currently_playing_tid = None
 song_playlist = [Song(tid=1, path='keep=video_89eusrJpdJACDWxhAxzG.mp4', title='Song1',state='done'),
-                 Song(tid=2, path='keep=nothing_-7MEND5qWR1AliwI6mIs.mp4', title='Song2', state='done'),
+                 Song(tid=2, path='keep=nothing_-7MEND5qWR1AliwI6mIs.mp4', title='Song2', state='processing'),
                  Song(tid=3, path='keep=all_89eusrJpdJACDWxhAxzG.mp4', title='Song3', state='done'),
-                 Song(tid=4, path='big.mp4', title='Song4', state='done'),
-                 Song(tid=5, path='H1.mp4', title='Song5', state='done'),
+                 Song(tid=4, path='big.mp4', title='Song4', state='queue'),
+                 Song(tid=5, path='H1.mp4', title='Song5', state='processing'),
                  Song(tid=6, path='H11.mp4', title='Song6', state='done'),
                  Song(tid=7, path='H2.mp4', title='Song7', state='done'),
                  Song(tid=8, path='H22.mp4', title='Song8', state='done'),
@@ -103,6 +109,40 @@ def serve_song_file(filename):
     """Serve a file from the songs folder."""
     songs_dir = os.path.join(os.path.dirname(__file__), "songs")
     return send_from_directory(songs_dir, filename)
+
+@app.route("/upload_local", methods=["POST"])
+def upload_local():
+    """
+    Handle file upload from the form in index.html.
+    The file is saved to the 'songs/' folder and
+    a new Song is appended to the playlist with state='queue'.
+    """
+    global next_tid
+
+    # 'audio_file' corresponds to the <input name="audio_file"> in index.html
+    file = request.files.get('audio_file')
+    if not file or file.filename == '':
+        return redirect(url_for('index'))  # No file selected
+
+    if allowed_file(file.filename):
+        filename = secure_filename(file.filename)  # sanitize the filename
+        save_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(save_path)
+
+        # Create a new Song with state='queue'
+        new_song = Song(
+            tid=next_tid,
+            path=filename,  # just store the filename (we serve it via /songs/<filename>)
+            title=filename, # or derive a nicer title if you want
+            state='queue'
+        )
+        next_tid += 1
+        song_playlist.append(new_song)
+
+        # Broadcast the new playlist so clients update
+        socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
+
+    return redirect(url_for('index'))
 
 @socketio.on('connect')
 def on_connect():
