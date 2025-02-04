@@ -470,12 +470,12 @@ event = None
 worker_thread = None
 should_stop = False
 job_queue = None
-job_done_cb = None
+job_status_cb = None
 max_job_history = 1000
 default_model_type = 'faster'
 
 def work_loop():
-    global should_stop, job_queue, lock, event, job_done_cb
+    global should_stop, job_queue, lock, event, job_status_cb
     try:
         while not should_stop:
             job = None
@@ -493,6 +493,8 @@ def work_loop():
                 continue
                 
             try:
+                job_status_cb(job, None)
+                
                 output = None
                 
                 #work
@@ -516,7 +518,7 @@ def work_loop():
                 with lock:
                     job.update_status_locked('done', output)
                     
-                job_done_cb(job, None)
+                job_status_cb(job, None)
             except Exception as e:
                 if isinstance(e, (StopException, KeyboardInterrupt)):
                     raise
@@ -524,13 +526,13 @@ def work_loop():
                 with lock:
                     job.update_status_locked('error')
 
-                job_done_cb(job, e)
+                job_status_cb(job, e)
     except StopException:
         pass
 
 
-def init_thread(pop_cb):
-    global worker_thread, job_queue, should_stop, lock, event, job_done_cb
+def init_thread(status_cb):
+    global worker_thread, job_queue, should_stop, lock, event, job_status_cb
     
     os.makedirs(local_upload_dir, exist_ok=True)
     os.makedirs(local_cache_dir, exist_ok=True)
@@ -541,7 +543,7 @@ def init_thread(pop_cb):
     lock = threading.Lock()
     event = threading.Event()
     job_queue = tuple()
-    job_done_cb = pop_cb
+    job_status_cb = status_cb
     worker_thread = threading.Thread(target=work_loop)
     worker_thread.start()
     
@@ -573,7 +575,6 @@ def set_queue(jobs : list[Job]):
     with lock:
         job_queue = tuple(j for j in jobs)
         event.set()
-        
 
 def thread_test():
     def cb(job, error):
