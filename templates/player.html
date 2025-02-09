@@ -1,38 +1,105 @@
-<!-- templates/player.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Player</title>
-    <style>
+  <meta charset="UTF-8">
+  <title>Now Playing</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
     body {
-        font-family: Arial, sans-serif;
-        margin: 20px;
+      font-family: "Arial", sans-serif;
+      background-color: #f4f4f4;
+      text-align: center;
+      padding: 20px;
     }
-    .player-container {
-        margin-bottom: 20px;
+    h1 {
+      font-size: 28px;
+      color: #007bff;
+      margin-bottom: 10px;
+    }
+    #player-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      display: inline-block;
+    }
+    video {
+      width: 100%;
+      max-width: 640px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: 0.3s;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #0056b3;
     }
     .no-song {
-        color: red;
-        font-weight: bold;
+      font-size: 18px;
+      color: #888;
+      font-weight: bold;
+      margin-top: 20px;
     }
-    </style>
+  </style>
 </head>
 <body>
-    <h1>Video Player</h1>
-
-    {% if song %}
-        <div class="player-container">
-            <h2>Now Playing: {{ song.title }}</h2>
-            <video src="/songs/{{ song.path }}" width="640" height="360" controls autoplay></video>
-        </div>
-        <form action="{{ url_for('player_next') }}" method="POST">
-            <button type="submit">Next Song</button>
-        </form>
+  <h1>Now Playing</h1>
+  <div id="player-container">
+    {% if current_song %}
+      <video id="videoPlayer" controls autoplay>
+        <source id="videoSource" src="/{{ current_song.out_path }}" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+      <form action="/next_song" method="POST">
+        <button type="submit">Next Song</button>
+      </form>
     {% else %}
-        <div class="no-song">
-            <p>No "done" songs are currently available!</p>
-        </div>
+      <p class="no-song" id="no-song-msg">No songs available to play.</p>
     {% endif %}
+  </div>
+
+  <script>
+  var socket = io();
+  socket.on("player_updated", function(data) {
+    var videoContainer = document.getElementById("player-container");
+
+    if (data.current_song) {
+      videoContainer.innerHTML = `
+        <video id="videoPlayer" width="640" height="360" controls autoplay>
+          <source id="videoSource" src="/${data.current_song}" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+        <form id="nextSongForm">
+          <button type="submit">Next Song</button>
+        </form>
+      `;
+      addNextSongEventListener();
+    } else {
+      videoContainer.innerHTML = `<p>No songs available to play.</p>`;
+    }
+  });
+
+  function addNextSongEventListener() {
+    var form = document.getElementById("nextSongForm");
+    if (form) {
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        fetch("/next_song", { method: "POST" })
+          .then(response => console.log("Next song request sent."))
+          .catch(error => console.error("Error requesting next song:", error));
+      });
+    }
+  }
+  document.addEventListener("DOMContentLoaded", addNextSongEventListener);
+</script>
 </body>
 </html>

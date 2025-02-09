@@ -1,259 +1,121 @@
+from backend import Job, set_queue, init_thread, stop_thread
 import os
-import string
-from flask import Flask, render_template, redirect, url_for, request, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from flask_socketio import SocketIO, emit
-from backend import Song, thread_test, init_thread
-import threading
-import time, random
-from werkzeug.utils import secure_filename
+import traceback
+from typing import List
 
-ALLOWED_EXTENSIONS = {'mp4', 'mp3', 'wav', 'ogg', 'm4a'}
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
+UPLOAD_FOLDER = "uploads"
+SONGS_FOLDER = "songs"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-def _get_song_by_tid(tid):
-    """Return the Song object matching the TID, or None if not found."""
-    for s in song_playlist:
-        if s.tid == tid:
-            return s
-    return None
-
-def _get_first_done_song():
-    """Return the first Song in the playlist with state='done', or None if none exist."""
-    for s in song_playlist:
-        if s.state == 'done':
-            return s
-    return None
-
-def _remove_song_by_tid(tid):
-    """Remove and return the Song from the playlist if found, else None."""
-    for i, s in enumerate(song_playlist):
-        if s.tid == tid:
-            return song_playlist.pop(i)
-    return None
-
-def _song_to_dict_plus_playing(song):
-    """
-    Convert the song to a dictionary, plus add 'is_playing' if
-    it is the global currently_playing_tid.
-    """
-    d = song.to_dict()
-    d["is_playing"] = (song.tid == currently_playing_tid)
-    return d
+os.makedirs(SONGS_FOLDER, exist_ok=True)
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app)
-next_tid = 10
-currently_playing_tid = None
-song_playlist = [Song(tid=1, path='keep=video_89eusrJpdJACDWxhAxzG.mp4', title='Song1',state='done'),
-                 Song(tid=2, path='keep=nothing_-7MEND5qWR1AliwI6mIs.mp4', title='Song2', state='processing'),
-                 Song(tid=3, path='keep=all_89eusrJpdJACDWxhAxzG.mp4', title='Song3', state='done'),
-                 Song(tid=4, path='big.mp4', title='Song4', state='queue'),
-                 Song(tid=5, path='H1.mp4', title='Song5', state='processing'),
-                 Song(tid=6, path='H11.mp4', title='Song6', state='done'),
-                 Song(tid=7, path='H2.mp4', title='Song7', state='done'),
-                 Song(tid=8, path='H22.mp4', title='Song8', state='done'),
-                 Song(tid=9, path='Q.mp4', title='Song9', state='done')]
+socketio = SocketIO(app, cors_allowed_origins="*")
+playlist = []
+current_song = None
+
+def get_current_song():
+    global current_song
+    for job in playlist:
+        if job.status == "done":
+            if current_song is None or current_song.tid != job.tid:
+                current_song = job
+                socketio.emit("player_updated", {"current_song": job.out_path})
+            return job
+    current_song = None
+    return None
+
+@app.route("/next_song", methods=["POST"])
+def next_song():
+    global playlist, current_song
+    if current_song in playlist:
+        playlist.remove(current_song)
+        set_queue(playlist)
+    current_song = get_current_song()
+    socketio.emit("playlist_updated", serialize_playlist())
+    socketio.emit("player_updated", {"current_song": current_song.out_path if current_song else None})
+    return "", 204
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", playlist=playlist, current_song=get_current_song())
 
-@app.route("/player", methods=["GET"])
+@app.route("/player")
 def player():
-    global currently_playing_tid
+    current = get_current_song()
+    return render_template("player.html", current_song=current)
 
-    # If there's no currently playing song or it no longer exists in the playlist, pick a new one
-    if not _get_song_by_tid(currently_playing_tid) or currently_playing_tid is None:
-        # Try to pick the first "done" song
-        done_song = _get_first_done_song()
-        if done_song is not None:
-            currently_playing_tid = done_song.tid
-        else:
-            currently_playing_tid = None
-        # Find the actual Song object for the currently playing TID
-    playing_song = _get_song_by_tid(currently_playing_tid)
-    print("########")
-    print(playing_song)
-    print(playing_song.path)
-    print("########")
-    return render_template("player.html", song=playing_song)
-
-@app.route("/player/next", methods=["POST"])
-def player_next():
-    """
-    "Next Song" button handler:
-    - Remove the currently playing song from the playlist.
-    - Find the next available "done" song, set it as currently playing.
-    - Redirect back to /player.
-    """
-    global currently_playing_tid
-    playing_song = _get_song_by_tid(currently_playing_tid)
-
-    # 1) Remove the old song if it exists
-    if playing_song:
-        _remove_song_by_tid(playing_song.tid)
-
-    # 2) Pick the next "done" song, if any
-    next_song = _get_first_done_song()
-    currently_playing_tid = next_song.tid if next_song else None
-
-    # Notify all connected sockets that the playlist changed
-    socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
-
-    return redirect(url_for('player'))
+@app.route("/add_song", methods=["POST"])
+def add_song():
+    youtube_url = request.form.get("youtube_url", "").strip()
+    local_file = request.files.get("local_file")
+    keep_val = request.form.get("keep", "nothing")
+    if youtube_url:
+        job = Job(url=youtube_url, keep=keep_val)
+        playlist.append(job)
+    elif local_file and local_file.filename:
+        save_path = os.path.join(UPLOAD_FOLDER, local_file.filename)
+        local_file.save(save_path)
+        job = Job(path=save_path, keep=keep_val)
+        playlist.append(job)
+    else:
+        return redirect(url_for("index"))
+    set_queue(playlist)
+    socketio.emit("playlist_updated", serialize_playlist())
+    return redirect(url_for("index"))
 
 @app.route("/songs/<path:filename>")
 def serve_song_file(filename):
-    """Serve a file from the songs folder."""
-    songs_dir = os.path.join(os.path.dirname(__file__), "songs")
-    return send_from_directory(songs_dir, filename)
+    return send_from_directory(SONGS_FOLDER, filename)
 
-@app.route("/upload_local", methods=["POST"])
-def upload_local():
-    """
-    Handle file upload from the form in index.html.
-    The file is saved to the 'songs/' folder and
-    a new Song is appended to the playlist with state='queue'.
-    """
-    global next_tid
-
-    # 'audio_file' corresponds to the <input name="audio_file"> in index.html
-    file = request.files.get('audio_file')
-    if not file or file.filename == '':
-        return redirect(url_for('index'))  # No file selected
-
-    if allowed_file(file.filename):
-        filename = secure_filename(file.filename)  # sanitize the filename
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(save_path)
-
-        # Create a new Song with state='queue'
-        new_song = Song(
-            tid=next_tid,
-            path=filename,  # just store the filename (we serve it via /songs/<filename>)
-            title=filename, # or derive a nicer title if you want
-            state='queue'
-        )
-        next_tid += 1
-        song_playlist.append(new_song)
-
-        # Broadcast the new playlist so clients update
-        socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
-
-    return redirect(url_for('index'))
-
-@socketio.on('connect')
+@socketio.on("connect")
 def on_connect():
-    print("Client connected.")
-    emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
+    emit("playlist_updated", serialize_playlist())
+    emit("player_updated", {"current_song": current_song.out_path if current_song else None})
 
 
-@socketio.on('client_add_song')
-def on_client_add_song(data):
-    global next_tid
-    title = data.get("title", "Untitled Song")
-    new_tid = next_tid
-    next_tid += 1
+@socketio.on("remove_song")
+def handle_remove_song(index):
+    global playlist, current_song
+    i = int(index)
+    if 0 <= i < len(playlist):
+        if playlist[i] != current_song:
+            del playlist[i]
+            set_queue(playlist)
+            socketio.emit("playlist_updated", serialize_playlist())
 
-    # For simplicity, the path can be a placeholder
-    new_song = Song(new_tid, f"songs/{new_tid}.mp4", title, 'queue')
-    song_playlist.append(new_song)
+@socketio.on("reorder_playlist")
+def handle_reorder_playlist(data):
+    global playlist
+    old_index, new_index = data["oldIndex"], data["newIndex"]
+    if 0 <= old_index < len(playlist) and 0 <= new_index < len(playlist):
+        if playlist[old_index] != get_current_song():
+            playlist.insert(new_index, playlist.pop(old_index))
+            set_queue(playlist)
+            socketio.emit("playlist_updated", serialize_playlist())
 
-    print(f"Added new song tid={new_tid}: {title}")
-    socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
+def serialize_playlist():
+    current = get_current_song()
+    return [{
+        "title": j.title,
+        "status": j.status,
+        "is_playing": (current is not None and j.tid == current.tid),
+        "out_path": getattr(j, "out_path", "")
+    } for j in playlist]
 
-@socketio.on('client_remove_song')
-def on_client_remove_song(data):
-    """
-    data = { "tid": some_tid }
-    Remove the song with the given TID from the playlist,
-    and broadcast the updated playlist.
-    """
-    tid = data.get("tid")
-    if tid is None:
-        return
+def job_status_callback(updated_job):
+    socketio.emit("playlist_updated", serialize_playlist())
 
-    # Find the song by TID and remove it if found
-    for i, song in enumerate(song_playlist):
-        if song.tid == tid:
-            removed = song_playlist.pop(i)
-            print(f"Removed song tid={removed.tid}: {removed.title}")
-            break
+def cb(job, error):
+    job_status_callback(job)
+    if error:
+        print(f'{job.tid} error: ', traceback.format_exc(error))
+    else:
+        print(f'{job.tid} is available at {job.out_path} ({job.status})')
 
-    # Broadcast updates to all clients
-    socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
+init_thread(cb)
 
-
-@socketio.on('client_reorder')
-def on_client_reorder(data):
-    old_index = data.get("oldIndex")
-    new_index = data.get("newIndex")
-
-    # Safety check: if the top item is currently playing, don't let a user reorder above it
-    if new_index == 0:
-        top_song = song_playlist[0]
-        if top_song.tid == currently_playing_tid:
-            print("Attempted to reorder above the now-playing song. Ignoring.")
-            return  # Do nothing
-
-    # Continue with your normal reorder logic
-    if 0 <= old_index < len(song_playlist) and 0 <= new_index < len(song_playlist):
-        song = song_playlist.pop(old_index)
-        song_playlist.insert(new_index, song)
-        print(f"Reordered: Moved {song.title} from {old_index} -> {new_index}")
-        socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
-
-
-
-def random_playlist_modification(playlist):
-    """Randomly modify the global playlist: add, remove, reorder, or change state."""
-    global next_tid
-
-    operations = ["add", "remove", "reorder", "change_state"]
-    operation = random.choice(operations)
-
-    if operation == "add":
-        # Create a new random title
-        random_title = "NewSong_" + ''.join(random.choices(string.ascii_uppercase, k=5))
-        new_song = Song(
-            tid=next_tid,
-            path=f"songs/{next_tid}.mp4",
-            title=random_title,
-            state="queue"
-        )
-        playlist.append(new_song)
-        print(f"Added new song: {new_song.title} (tid={new_song.tid})")
-        next_tid += 1
-
-    elif operation == "remove":
-        if playlist:
-            # Remove a random song from the list
-            idx = random.randrange(len(playlist))
-            removed_song = playlist.pop(idx)
-            print(f"Removed song tid={removed_song.tid}: {removed_song.title}")
-
-    elif operation == "reorder":
-        if len(playlist) > 1:
-            random.shuffle(playlist)
-            print("Reordered (shuffled) the playlist.")
-
-    elif operation == "change_state":
-        if playlist:
-            song = random.choice(playlist)
-            possible_states = ["queue", "processing", "done", "error"]
-            old_state = song.state
-            song.state = random.choice(possible_states)
-            print(f"Changed state of tid={song.tid} from {old_state} to {song.state}")
-
-def background_updater():
-    while True:
-        time.sleep(7)
-        # random_playlist_modification(song_playlist)
-        print(song_playlist)
-        socketio.emit('update_songs', [_song_to_dict_plus_playing(s) for s in song_playlist])
 if __name__ == "__main__":
-    thread = threading.Thread(target=background_updater, daemon=True)
-    thread.start()
-    socketio.run(app, debug=True, host="0.0.0.0",port=5000,allow_unsafe_werkzeug=True)
+    try:
+        socketio.run(app, debug=True, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True)
+    finally:
+        stop_thread()

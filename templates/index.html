@@ -1,394 +1,217 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Karaoke Fun</title>
-  <!-- Socket.IO -->
+  <meta charset="UTF-8" />
+  <title>Karaoke Playlist</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-  <!-- SortableJS -->
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
       margin: 20px;
-      background: #fafafa;
+      text-align: center;
     }
-    h1 {
-      margin-bottom: 10px;
+    h1, h2 {
+      color: #333;
     }
-    .main-container {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .add-song-section,
-    .upload-file-section {
-      background-color: #fff;
-      padding: 15px;
+    form {
+      background: white;
+      padding: 20px;
       border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      display: inline-block;
+      text-align: left;
     }
-    .add-song-section h2,
-    .upload-file-section h2 {
-      margin-top: 0;
-    }
-
-    /* Grouping the radio buttons and text input in a fieldset for clarity */
-    fieldset {
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      padding: 10px;
-      margin-top: 10px;
-    }
-    legend {
-      font-weight: bold;
-      padding: 0 6px;
-    }
-
-    .song-input {
-      font-size: 14px;
-      padding: 5px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    .add-button {
-      font-size: 14px;
-      padding: 5px 10px;
-      margin-left: 5px;
-      cursor: pointer;
-      background-color: #4CAF50;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-    }
-    .add-button:hover {
-      background-color: #45a049;
-    }
-
-    .radio-options {
+    .input-group {
       display: flex;
-      gap: 15px;
-      margin-top: 8px;
-    }
-    .radio-options label {
-      display: flex;
+      gap: 1rem;
+      justify-content: center;
       align-items: center;
-      gap: 4px;
-      cursor: pointer;
+      margin-bottom: 1rem;
     }
-
-    /* The upload file form styling */
-    .upload-file-section form {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-width: 300px;
-    }
-    .upload-file-section input[type="file"] {
-      cursor: pointer;
-    }
-    .upload-file-section button {
-      font-size: 14px;
-      padding: 5px 10px;
-      cursor: pointer;
-      background-color: #2196F3;
-      color: #fff;
-      border: none;
+    input[type="text"], input[type="file"] {
+      padding: 8px;
+      border: 1px solid #ccc;
       border-radius: 4px;
+      width: 250px;
     }
-    .upload-file-section button:hover {
-      background-color: #1976D2;
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: 0.3s;
     }
-
-    /* Song list & animations (same as before) */
-    #song-list {
-      list-style-type: none;
-      padding-left: 0;
-      max-width: 600px;
-      transition: all 0.3s ease-in-out;
+    button:hover {
+      background-color: #0056b3;
     }
-    #song-list li {
-      background-color: #f5f5f5;
-      margin: 5px 0;
+    .playlist-container {
+      margin-top: 20px;
+      width: 400px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: white;
+      margin: 8px 0;
       padding: 10px;
+      border-radius: 5px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-radius: 4px;
-      transition: transform 0.2s ease, opacity 0.2s ease;
-    }
-    li.removing {
-      opacity: 0;
-      transform: translateX(-100%);
-    }
-    li.adding {
-      opacity: 0;
-      transform: translateX(100%);
-      animation: slideIn 0.25s forwards ease;
-    }
-    @keyframes slideIn {
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-    .song-info {
-      display: flex;
-      align-items: center;
-    }
-    .song-title {
-      font-weight: bold;
-    }
-    .song-icon {
-      margin-left: 10px;
-      font-size: 18px;
-    }
-    .now-playing-icon {
-      margin-left: 10px;
-      font-size: 18px;
-      color: green;
-    }
-    .action-buttons {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .remove-btn {
-      cursor: pointer;
-      font-size: 16px;
-      padding: 2px 5px;
-      border: none;
-      background-color: #eee;
-      border-radius: 3px;
-    }
-    .remove-btn:hover {
-      background-color: #ddd;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      cursor: grab;
     }
     .drag-handle {
-      cursor: move;
-      font-size: 20px;
-      color: #888;
+      cursor: grab;
       margin-right: 10px;
-      user-select: none;
     }
-    .drag-handle:hover {
-      color: #555;
+    .status {
+      width: 30px; /* Fixed width for alignment */
+      text-align: center;
     }
+    .remove-btn {
+      background: none;
+      border: none;
+      font-size: 16px;
+      color: #dc3545;
+      cursor: pointer;
+    }
+    .remove-btn:hover {
+      color: #c82333;
+    }
+    .song-details {
+      display: flex;
+      align-items: center;
+      flex-grow: 1;
+      justify-content: space-between;
+    }
+
+    .playing-song {
+      font-weight: bold;
+      color: #007bff;
+    }
+
   </style>
 </head>
 <body>
-  <h1>Karaoke Fun</h1>
-
-  <div class="main-container">
-    <!-- First container: Add Song from YouTube URL + Karaoke Options -->
-    <div class="add-song-section">
-      <h2>Add Song from YouTube URL</h2>
-      <fieldset>
-        <legend>Song Data</legend>
-
-        <div style="margin-bottom: 10px;">
-          <input type="text" id="song-title-input" class="song-input" placeholder="Enter youtube URL..." />
-          <button id="add-song-btn" class="add-button">Add Song</button>
-        </div>
-
-        <!-- The 3 radio options clearly associated to the "Add Song" input -->
-        <div class="radio-options" id="karaoke-options">
-          <label>
-            <input type="radio" name="karaoke_option" value="full_karaoke">
-            Make Full Karaoke
-          </label>
-          <label>
-            <input type="radio" name="karaoke_option" value="remove_vocals">
-            Just remove vocals
-          </label>
-          <label>
-            <input type="radio" name="karaoke_option" value="play_as_is" checked>
-            Play as is
-          </label>
-        </div>
-      </fieldset>
+  <h1>Karaoke Playlist</h1>
+  <form action="{{ url_for('add_song') }}" method="POST" enctype="multipart/form-data">
+    <div class="input-group">
+      <div>
+        <label for="youtube_url">YouTube URL</label><br>
+        <input type="text" name="youtube_url" id="youtube_url" placeholder="Paste YouTube URL">
+      </div>
+      <strong>OR</strong>
+      <div>
+        <label for="local_file">Local File</label><br>
+        <input type="file" name="local_file" id="local_file" accept="video/*">
+      </div>
     </div>
 
-    <!-- Second container: Upload Local File -->
-    <div class="upload-file-section">
-      <h2>Upload Local Audio File</h2>
-      <form action="/upload_local" method="POST" enctype="multipart/form-data">
-        <input type="file" name="local_file" accept=".mp4,.mp3,.wav,.ogg,.m4a" />
-        <button type="submit">Upload File</button>
-      </form>
+    <div style="margin-bottom: 10px;">
+      <label><input type="radio" name="keep" value="nothing" checked> Make Full Karaoke</label>
+      <label><input type="radio" name="keep" value="video"> Just Remove Vocals</label>
+      <label><input type="radio" name="keep" value="all"> Keep video as is</label>
     </div>
+
+    <button type="submit">Add Song</button>
+  </form>
+
+  <hr/>
+
+  <div class="playlist-container">
+    <h2>Playlist</h2>
+    <ul id="playlist">
+      {% for job in playlist %}
+      <li data-index="{{ loop.index0 }}" class="{% if job.is_playing %}playing-song{% endif %}">
+        <span class="drag-handle">☰</span>
+        <div class="song-details">
+          <span class="title">
+            {% if job.is_playing %}
+              🎵
+            {% endif %}
+            {{ job.title }}
+          </span>
+          <span class="status">{{ job.status }}</span>
+        </div>
+        {% if not job.is_playing %}
+          <button class="remove-btn" data-index="{{ loop.index0 }}">❌</button>
+        {% endif %}
+      </li>
+    {% endfor %}
+    </ul>
   </div>
 
-  <ul id="song-list"></ul>
-
   <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const socket = io();
-    const songListEl = document.getElementById('song-list');
-    const addSongBtn = document.getElementById('add-song-btn');
-    const songTitleInput = document.getElementById('song-title-input');
+    document.addEventListener("DOMContentLoaded", () => {
+      const socket = io();
 
-    // Karaoke Option Handlers (placeholder)
-    function handleMakeFullKaraoke() {
-      // Placeholder function
-      console.log("Make Full Karaoke was chosen.");
-    }
-    function handleRemoveVocals() {
-      // Placeholder function
-      console.log("Just remove vocals was chosen.");
-    }
-    function handlePlayAsIs() {
-      // Placeholder function
-      console.log("Play as is was chosen.");
-    }
-
-    // Listen for changes on the karaoke options
-    document.querySelectorAll('input[name="karaoke_option"]').forEach(radio => {
-      radio.addEventListener('change', () => {
-        switch(radio.value) {
-          case 'full_karaoke': handleMakeFullKaraoke(); break;
-          case 'remove_vocals': handleRemoveVocals(); break;
-          case 'play_as_is': handlePlayAsIs(); break;
-        }
-      });
-    });
-
-    // Socket.IO connection
-    socket.on('connect', () => {
-      console.log("Connected to Socket.IO server");
-    });
-
-    socket.on('update_songs', (songs) => {
-      console.log("Received updated playlist:", songs);
-      reRenderSongList(songs);
-    });
-
-    // SortableJS for reorder
-    const sortable = new Sortable(songListEl, {
-      animation: 150,
-      handle: ".drag-handle",
-      onEnd: (evt) => {
-        const oldIndex = evt.oldIndex;
-        const newIndex = evt.newIndex;
-        console.log(`Drag ended: from ${oldIndex} to ${newIndex}`);
-        socket.emit('client_reorder', { oldIndex, newIndex });
-      }
-    });
-
-    // Add Song by URL
-    addSongBtn.addEventListener('click', () => {
-      const title = songTitleInput.value.trim();
-      if (title) {
-        socket.emit('client_add_song', { title: title });
-        songTitleInput.value = '';
-      }
-    });
-
-    function reRenderSongList(songs) {
-      // Build a map of existing <li> elements by TID
-      const existingElsByTid = {};
-      [...songListEl.children].forEach(li => {
-        existingElsByTid[li.dataset.tid] = li;
+      socket.on('connect', () => {
+        console.log("Connected to Socket.IO server");
       });
 
-      // Create new <li> elements in the correct order
-      const newEls = songs.map((song) => {
-        let li = existingElsByTid[song.tid];
-        if (!li) {
-          // This is a newly added song
-          li = document.createElement('li');
-          li.classList.add('adding');
-          setTimeout(() => {
-            li.classList.remove('adding');
-          }, 250);
+      function getStatusIcon(status) {
+        switch (status) {
+          case "idle": return "⌛";
+          case "processing": return "🔄";
+          case "done": return "✅";
+          case "error": return "❌";
+          default: return "";
         }
-        delete existingElsByTid[song.tid]; // mark as used
+      }
 
-        // Store TID and is_playing
-        li.dataset.tid = song.tid;
-        li.dataset.isPlaying = song.is_playing;
-
-        // Rebuild inside
-        li.innerHTML = '';
-
-        // Info container
-        const infoDiv = document.createElement('div');
-        infoDiv.classList.add('song-info');
-
-        // If NOT playing => show drag handle
-        if (!song.is_playing) {
-          const dragHandle = document.createElement('span');
-          dragHandle.classList.add('drag-handle');
-          dragHandle.textContent = '⋮⋮'; // or any drag icon
-          infoDiv.appendChild(dragHandle);
-        }
-
-        // Song title
-        const titleSpan = document.createElement('span');
-        titleSpan.classList.add('song-title');
-        titleSpan.textContent = song.title;
-        infoDiv.appendChild(titleSpan);
-
-        // State icon
-        const iconSpan = document.createElement('span');
-        iconSpan.classList.add('song-icon');
-        switch (song.state) {
-          case 'queue':       iconSpan.textContent = '⏳'; break;
-          case 'processing':  iconSpan.textContent = '🔄'; break;
-          case 'done':        iconSpan.textContent = '✅'; break;
-          case 'error':       iconSpan.textContent = '❌'; break;
-          default:            iconSpan.textContent = '❓'; break;
-        }
-        infoDiv.appendChild(iconSpan);
-
-        // Now playing?
-        if (song.is_playing) {
-          const npSpan = document.createElement('span');
-          npSpan.classList.add('now-playing-icon');
-          npSpan.textContent = '🔊';
-          infoDiv.appendChild(npSpan);
-        }
-
-        // Right side: remove
-        const actionDiv = document.createElement('div');
-        actionDiv.classList.add('action-buttons');
-
-        // Remove button
-        const removeBtn = document.createElement('button');
-        removeBtn.textContent = 'Remove';
-        removeBtn.classList.add('remove-btn');
-        removeBtn.addEventListener('click', () => {
-          li.classList.add('removing');
-          setTimeout(() => {
-            socket.emit('client_remove_song', { tid: song.tid });
-          }, 200);
+      socket.on("playlist_updated", (updatedPlaylist) => {
+        console.log("Playlist updated:", updatedPlaylist);
+        const playlistEl = document.getElementById("playlist");
+        playlistEl.innerHTML = "";
+        updatedPlaylist.forEach((job, index) => {
+          const li = document.createElement("li");
+          li.dataset.index = index;
+          if (job.is_playing) {
+            li.classList.add("playing-song");
+          }
+          li.innerHTML = `
+            <span class="drag-handle">☰</span>
+            <div class="song-details">
+              <span class="title">
+                ${job.is_playing ? "🎵 " : ""}${job.title}
+              </span>
+              <span class="status">${getStatusIcon(job.status)}</span>
+            </div>
+            ${job.is_playing ? "" : `<button class="remove-btn" data-index="${index}">❌</button>`}
+          `;
+          playlistEl.appendChild(li);
         });
-        actionDiv.appendChild(removeBtn);
-
-        li.appendChild(infoDiv);
-        li.appendChild(actionDiv);
-
-        return li;
       });
 
-      // Animate removal of leftover <li>
-      for (let tid in existingElsByTid) {
-        const li = existingElsByTid[tid];
-        li.classList.add('removing');
-        setTimeout(() => li.remove(), 200);
-      }
-
-      // Rebuild the UL
-      songListEl.innerHTML = '';
-      newEls.forEach(li => {
-        songListEl.appendChild(li);
+      $(document).on("click", ".remove-btn", function() {
+        const index = $(this).data("index");
+        socket.emit("remove_song", index);
       });
 
-      // Let SortableJS know the new item order
-      sortable.sort(newEls.map(li => li.dataset.tid));
-    }
-  });
+      new Sortable(document.getElementById("playlist"), {
+        handle: ".drag-handle",
+        animation: 150,
+        onStart: function (evt) {
+          const item = evt.item;
+          if (item.classList.contains("playing-song")) {
+            evt.preventDefault();
+          }
+        },
+        onEnd: function (evt) {
+          socket.emit("reorder_playlist", { oldIndex: evt.oldIndex, newIndex: evt.newIndex });
+        }
+      });
+    });
   </script>
 </body>
 </html>
