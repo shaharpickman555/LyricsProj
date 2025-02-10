@@ -28,13 +28,14 @@ def get_current_song():
 @app.route("/next_song", methods=["POST"])
 def next_song():
     global playlist, current_song
-    if current_song in playlist:
+    if current_song and current_song in playlist:
         playlist.remove(current_song)
         set_queue(playlist)
     current_song = get_current_song()
     socketio.emit("playlist_updated", serialize_playlist())
     socketio.emit("player_updated", {"current_song": current_song.out_path if current_song else None})
     return "", 204
+
 @app.route("/")
 def index():
     return render_template("index.html", playlist=playlist, current_song=get_current_song())
@@ -116,6 +117,6 @@ init_thread(cb)
 
 if __name__ == "__main__":
     try:
-        socketio.run(app, debug=True, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True)
+        socketio.run(app, debug=True, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True, use_reloader=False)
     finally:
         stop_thread()

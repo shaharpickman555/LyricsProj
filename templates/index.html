@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>Karaoke Playlist</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
@@ -10,208 +12,161 @@
     body {
       font-family: Arial, sans-serif;
       background-color: #f8f9fa;
-      margin: 20px;
-      text-align: center;
-    }
-    h1, h2 {
-      color: #333;
-    }
-    form {
-      background: white;
       padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      display: inline-block;
-      text-align: left;
-    }
-    .input-group {
-      display: flex;
-      gap: 1rem;
-      justify-content: center;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-    input[type="text"], input[type="file"] {
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      width: 250px;
-    }
-    button {
-      background-color: #007bff;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-    button:hover {
-      background-color: #0056b3;
     }
     .playlist-container {
-      margin-top: 20px;
-      width: 400px;
-      margin-left: auto;
-      margin-right: auto;
+      max-width: 500px;
+      margin: auto;
     }
-    ul {
-      list-style: none;
-      padding: 0;
+    .playing-song {
+      font-weight: bold;
+      color: #007bff;
     }
-    li {
-      background: white;
-      margin: 8px 0;
-      padding: 10px;
-      border-radius: 5px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      cursor: grab;
+    .remove-btn {
+      background: none;
+      border: none;
+      font-size: 18px;
+      color: #dc3545;
+      cursor: pointer;
     }
     .drag-handle {
       cursor: grab;
       margin-right: 10px;
     }
     .status {
-      width: 30px; /* Fixed width for alignment */
+      width: 30px;
       text-align: center;
     }
-    .remove-btn {
-      background: none;
-      border: none;
-      font-size: 16px;
-      color: #dc3545;
-      cursor: pointer;
-    }
-    .remove-btn:hover {
-      color: #c82333;
-    }
-    .song-details {
-      display: flex;
-      align-items: center;
-      flex-grow: 1;
-      justify-content: space-between;
-    }
-
-    .playing-song {
-      font-weight: bold;
-      color: #007bff;
-    }
-
   </style>
 </head>
 <body>
-  <h1>Karaoke Playlist</h1>
-  <form action="{{ url_for('add_song') }}" method="POST" enctype="multipart/form-data">
-    <div class="input-group">
-      <div>
-        <label for="youtube_url">YouTube URL</label><br>
-        <input type="text" name="youtube_url" id="youtube_url" placeholder="Paste YouTube URL">
+
+<div class="container">
+  <h1 class="text-center">Karaoke Playlist</h1>
+
+  <form action="{{ url_for('add_song') }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label for="youtube_url">YouTube URL</label>
+        <input type="text" name="youtube_url" id="youtube_url" class="form-control" placeholder="Paste YouTube URL">
       </div>
-      <strong>OR</strong>
-      <div>
-        <label for="local_file">Local File</label><br>
-        <input type="file" name="local_file" id="local_file" accept="video/*">
+      <div class="col-md-6">
+        <label for="local_file">Local File</label>
+        <input type="file" name="local_file" id="local_file" accept="video/*" class="form-control">
       </div>
     </div>
 
-    <div style="margin-bottom: 10px;">
-      <label><input type="radio" name="keep" value="nothing" checked> Make Full Karaoke</label>
-      <label><input type="radio" name="keep" value="video"> Just Remove Vocals</label>
-      <label><input type="radio" name="keep" value="all"> Keep video as is</label>
+    <div class="mt-3">
+      <label class="form-check-label">
+        <input type="radio" name="keep" value="nothing" checked> Make Full Karaoke
+      </label>
+      <label class="form-check-label">
+        <input type="radio" name="keep" value="video"> Just Remove Vocals
+      </label>
+      <label class="form-check-label">
+        <input type="radio" name="keep" value="all"> Keep video as is
+      </label>
     </div>
 
-    <button type="submit">Add Song</button>
+    <button type="submit" class="btn btn-primary w-100 mt-3">Add Song</button>
   </form>
 
-  <hr/>
+  <hr>
 
   <div class="playlist-container">
-    <h2>Playlist</h2>
-    <ul id="playlist">
+    <h2 class="text-center">Playlist</h2>
+    <ul id="playlist" class="list-group">
       {% for job in playlist %}
-      <li data-index="{{ loop.index0 }}" class="{% if job.is_playing %}playing-song{% endif %}">
-        <span class="drag-handle">☰</span>
-        <div class="song-details">
-          <span class="title">
-            {% if job.is_playing %}
-              🎵
-            {% endif %}
-            {{ job.title }}
-          </span>
-          <span class="status">{{ job.status }}</span>
-        </div>
-        {% if not job.is_playing %}
-          <button class="remove-btn" data-index="{{ loop.index0 }}">❌</button>
-        {% endif %}
-      </li>
-    {% endfor %}
+        <li data-index="{{ loop.index0 }}" class="list-group-item d-flex justify-content-between align-items-center {% if job.is_playing %}playing-song{% endif %}">
+          <span class="drag-handle">☰</span>
+          <div class="flex-grow-1 text-start">
+            <span class="title">
+              {% if job.is_playing %}
+                🎵
+              {% endif %}
+              {{ job.title }}
+            </span>
+            <span class="status">{{ job.status }}</span>
+          </div>
+          {% if not job.is_playing %}
+            <button class="remove-btn" data-index="{{ loop.index0 }}">❌</button>
+          {% endif %}
+        </li>
+      {% endfor %}
     </ul>
+    <div class="d-flex justify-content-center mt-3">
+      <button id="nextSongBtn" class="btn btn-danger w-50">Next Song ⏭️</button>
+    </div>
   </div>
+</div>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const socket = io();
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const socket = io();
 
-      socket.on('connect', () => {
-        console.log("Connected to Socket.IO server");
-      });
+    socket.on('connect', () => {
+      console.log("Connected to Socket.IO server");
+    });
 
-      function getStatusIcon(status) {
-        switch (status) {
-          case "idle": return "⌛";
-          case "processing": return "🔄";
-          case "done": return "✅";
-          case "error": return "❌";
-          default: return "";
-        }
+    function getStatusIcon(status) {
+      switch (status) {
+        case "idle": return "⌛";
+        case "processing": return "🔄";
+        case "done": return "✅";
+        case "error": return "❌";
+        default: return "";
       }
+    }
 
-      socket.on("playlist_updated", (updatedPlaylist) => {
-        console.log("Playlist updated:", updatedPlaylist);
-        const playlistEl = document.getElementById("playlist");
-        playlistEl.innerHTML = "";
-        updatedPlaylist.forEach((job, index) => {
-          const li = document.createElement("li");
-          li.dataset.index = index;
-          if (job.is_playing) {
-            li.classList.add("playing-song");
-          }
-          li.innerHTML = `
-            <span class="drag-handle">☰</span>
-            <div class="song-details">
-              <span class="title">
-                ${job.is_playing ? "🎵 " : ""}${job.title}
-              </span>
-              <span class="status">${getStatusIcon(job.status)}</span>
-            </div>
-            ${job.is_playing ? "" : `<button class="remove-btn" data-index="${index}">❌</button>`}
-          `;
-          playlistEl.appendChild(li);
-        });
-      });
-
-      $(document).on("click", ".remove-btn", function() {
-        const index = $(this).data("index");
-        socket.emit("remove_song", index);
-      });
-
-      new Sortable(document.getElementById("playlist"), {
-        handle: ".drag-handle",
-        animation: 150,
-        onStart: function (evt) {
-          const item = evt.item;
-          if (item.classList.contains("playing-song")) {
-            evt.preventDefault();
-          }
-        },
-        onEnd: function (evt) {
-          socket.emit("reorder_playlist", { oldIndex: evt.oldIndex, newIndex: evt.newIndex });
+    socket.on("playlist_updated", (updatedPlaylist) => {
+      console.log("Playlist updated:", updatedPlaylist);
+      const playlistEl = document.getElementById("playlist");
+      playlistEl.innerHTML = "";
+      updatedPlaylist.forEach((job, index) => {
+        const li = document.createElement("li");
+        li.dataset.index = index;
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        if (job.is_playing) {
+          li.classList.add("playing-song");
         }
+        li.innerHTML = `
+          <span class="drag-handle">☰</span>
+          <div class="flex-grow-1 text-start">
+            <span class="title">${job.is_playing ? "🎵 " : ""}${job.title}</span>
+            <span class="status">${getStatusIcon(job.status)}</span>
+          </div>
+          ${job.is_playing ? "" : `<button class="remove-btn btn btn-sm btn-danger" data-index="${index}">❌</button>`}
+        `;
+        playlistEl.appendChild(li);
       });
     });
-  </script>
+
+    $(document).on("click", ".remove-btn", function() {
+      const index = $(this).data("index");
+      socket.emit("remove_song", index);
+    });
+
+    document.getElementById("nextSongBtn").addEventListener("click", function() {
+    fetch("/next_song", { method: "POST" })
+      .then(response => console.log("Next song request sent."))
+      .catch(error => console.error("Error requesting next song:", error));
+    });
+
+    new Sortable(document.getElementById("playlist"), {
+      handle: ".drag-handle",
+      animation: 150,
+      onStart: function (evt) {
+        const item = evt.item;
+        if (item.classList.contains("playing-song")) {
+          evt.preventDefault();
+        }
+      },
+      onEnd: function (evt) {
+        socket.emit("reorder_playlist", { oldIndex: evt.oldIndex, newIndex: evt.newIndex });
+      }
+    });
+  });
+</script>
+
 </body>
 </html>

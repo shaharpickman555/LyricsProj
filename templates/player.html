@@ -3,92 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <title>Now Playing</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-  <style>
-    body {
-      font-family: "Arial", sans-serif;
-      background-color: #f4f4f4;
-      text-align: center;
-      padding: 20px;
-    }
-    h1 {
-      font-size: 28px;
-      color: #007bff;
-      margin-bottom: 10px;
-    }
-    #player-container {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      display: inline-block;
-    }
-    video {
-      width: 100%;
-      max-width: 640px;
-      border-radius: 8px;
-      margin-bottom: 10px;
-    }
-    button {
-      background-color: #007bff;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: 0.3s;
-      font-size: 16px;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    .no-song {
-      font-size: 18px;
-      color: #888;
-      font-weight: bold;
-      margin-top: 20px;
-    }
-  </style>
 </head>
-<body>
-  <h1>Now Playing</h1>
-  <div id="player-container">
-    {% if current_song %}
-      <video id="videoPlayer" controls autoplay>
-        <source id="videoSource" src="/{{ current_song.out_path }}" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
-      <form action="/next_song" method="POST">
-        <button type="submit">Next Song</button>
-      </form>
-    {% else %}
-      <p class="no-song" id="no-song-msg">No songs available to play.</p>
-    {% endif %}
-  </div>
+<body class="text-center bg-light py-4">
+  <div class="container">
+    <h1 class="text-primary">Now Playing</h1>
 
-  <script>
-  var socket = io();
-  socket.on("player_updated", function(data) {
-    var videoContainer = document.getElementById("player-container");
-
-    if (data.current_song) {
-      videoContainer.innerHTML = `
-        <video id="videoPlayer" width="640" height="360" controls autoplay>
-          <source id="videoSource" src="/${data.current_song}" type="video/mp4">
+    <div id="player-container" class="bg-white p-4 rounded shadow">
+      {% if current_song %}
+        <video id="videoPlayer" class="w-100 rounded" controls autoplay>
+          <source id="videoSource" src="/{{ current_song.out_path }}" type="video/mp4">
           Your browser does not support the video tag.
         </video>
         <form id="nextSongForm">
-          <button type="submit">Next Song</button>
+          <button type="submit" class="btn btn-primary w-100 mt-3">Next Song</button>
         </form>
-      `;
-      addNextSongEventListener();
-    } else {
-      videoContainer.innerHTML = `<p>No songs available to play.</p>`;
-    }
-  });
+      {% else %}
+        <p class="no-song text-muted">No songs available to play.</p>
+      {% endif %}
+    </div>
+  </div>
 
-  function addNextSongEventListener() {
+  <script>
+    var socket = io();
+    socket.on("player_updated", function(data) {
+      var videoContainer = document.getElementById("player-container");
+      if (data.current_song) {
+        videoContainer.innerHTML = `
+          <video id="videoPlayer" class="w-100 rounded" controls autoplay>
+            <source id="videoSource" src="/${data.current_song}" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+          <form id="nextSongForm">
+            <button type="submit" class="btn btn-primary w-100 mt-3">Next Song</button>
+          </form>
+        `;
+        addNextSongEventListener();
+      } else {
+        videoContainer.innerHTML = `<p class="no-song text-muted">No songs available to play.</p>`;
+      }
+    });
+    function addNextSongEventListener() {
     var form = document.getElementById("nextSongForm");
     if (form) {
       form.addEventListener("submit", function (event) {
@@ -100,6 +58,6 @@
     }
   }
   document.addEventListener("DOMContentLoaded", addNextSongEventListener);
-</script>
+  </script>
 </body>
 </html>
