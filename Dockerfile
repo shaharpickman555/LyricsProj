@@ -27,7 +27,8 @@ RUN chmod 755 /root && mkdir /root/.ssh/ && chmod 700 /root/.ssh
 RUN cat /tmp/id_rsa.pub >> /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
 
 RUN pip install --no-cache-dir \
-    streamlit \
+    socketio \
+    flask-socketio \
     yt-dlp \
     faster-whisper \
     dora-search \
@@ -37,9 +38,9 @@ RUN pip install --no-cache-dir \
     openunmix \
     torchaudio
 RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=demucs
-COPY cmdb.py .
-RUN mkdir ./uploads
+RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 EXPOSE 8000
 EXPOSE 22
 CMD ["service", "ssh", "start"]
-CMD ["streamlit", "run", "cmdb.py", "--server.port=8000", "--server.headless=true"]
+CMD ["git", "pull", "origin", "main"]
+CMD ["python", "frontend.py", "--release"]
