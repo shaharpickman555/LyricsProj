@@ -6,7 +6,6 @@ import argparse
 import torch
 import demucs.api
 import yt_dlp
-import streamlit as st
 from collections import namedtuple
 import torch
 
@@ -641,40 +640,14 @@ def main(argv):
     
     set_model_framework(args.model_type)
 
-    if len(argv) >= 2: # CLI Mode
-        input = args.input
+    input = args.input
 
-        if not os.path.isfile(input):  # YT Link
-            input, title = youtube_download(input, local_upload_dir, audio_only=not args.keep_video)
-            
-        input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
-        generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(keep='video' if args.keep_video else 'nothing'), dont_cache=args.dont_use_cache)
-        return
+    if not os.path.isfile(input):  # YT Link
+        input, title = youtube_download(input, local_upload_dir, audio_only=not args.keep_video)
         
-    st.title('Karaoke Generator')
-    input_type = st.radio('Input Type', ['Local File', 'YouTube Link Without Lyrics', 'YouTube Link With Lyrics'])
-    if input_type == 'Local File':
-        uploaded_file = st.file_uploader('Choose an audio file (mp3 or wav)', type=['mp3', 'wav'])
-        if uploaded_file is not None:
-            input = canonify_input_file(content=uploaded_file.getbuffer())
-            st.success(f'File uploaded: {uploaded_file.name}')
-    else:
-        audio_only = input_type == 'YouTube Link Without Lyrics'
-        youtube_url = st.text_input('YouTube Link Without Lyrics')
-        if youtube_url:
-            local_path, title = youtube_download(youtube_url, local_upload_dir, audio_only=audio_only)
-            input = canonify_input_file(path=local_path)
-            st.success(f'Downloaded YouTube audio: {youtube_url}')
-            
-    if st.button('Generate Karaoke Video'):
-        with st.spinner('Processing...'):
-            if input_type == 'YouTube Link With Lyrics':
-                output = generate_with_cache(remove_vocals_from_video, input, selectors=dict(keep='video'), dont_cache=False)
-            else:
-                output = generate_with_cache(make_lyrics_video, input, selectors=dict(keep='nothing'), dont_cache=False)
-        st.success('Karaoke video generated!')
-        st.video(output)
+    input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
+    generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(keep='video' if args.keep_video else 'nothing'), dont_cache=args.dont_use_cache)
 
 if __name__ == '__main__':
-    #main(sys.argv)
-    thread_test()
+    main(sys.argv)
+    #thread_test()
