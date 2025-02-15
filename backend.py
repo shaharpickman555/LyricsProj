@@ -99,7 +99,7 @@ def align_audio(transcribe_result):
             loaded_align_model_lang = language
             
         model_result = whisperx.align(model_result['segments'], *loaded_align_model, audio, return_char_alignments=False, device=device_str)
-        return [[Word(word=f' {w['word']}', start=w['start'], end=w['end']) for w in segment.get('words', segment['word_segments'])] for segment in model_result['segments']]
+        return [[Word(word=f' {w["word"]}', start=w['start'], end=w['end']) for w in segment.get('words', segment['word_segments'])] for segment in model_result['segments']]
     else:
         #faster
         result, info = model_result
@@ -125,7 +125,7 @@ def getitem(l, i, default=None):
 def replace_ext(path, ext):
     if '.' not in path:
         return f'{path}{ext}'
-    return f'{path[:path.rfind('.')]}{ext}'
+    return f'{path[:path.rfind(".")]}{ext}'
     
 def youtube_info(url):
     with yt_dlp.YoutubeDL() as ydl:
@@ -147,7 +147,7 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False):
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=dont_cache)
-        outfile = os.path.join(local_dir, f'{info['id']}.{ext}')
+        outfile = os.path.join(local_dir, f'{info["id"]}.{ext}')
         if not os.path.exists(outfile) and not dont_cache:
             ydl.extract_info(url, download=True)
     return outfile, info['title']
@@ -385,9 +385,12 @@ def passthrough(input, output):
 def digest(path=None, content=None):
     return base64.b64encode(hashlib.sha256(open(path, 'rb').read() if path else content).digest()[:15], altchars=b'+-').decode()
 
+def selectors_join(selectors):
+    return '_'.join(f'{str(k)}={str(v)}' for k,v in selectors.items())
+    
 def generate_with_cache(f, local_path, selectors, dont_cache=False, **kwargs):
     name = replace_ext(os.path.basename(local_path), '')
-    out_path = os.path.join(local_cache_dir, f'{'_'.join(f'{str(k)}={str(v)}' for k,v in selectors.items())}_{name}.mp4')
+    out_path = os.path.join(local_cache_dir, f'{selectors_join(selectors)}_{name}.mp4')
     
     if dont_cache or not os.path.exists(out_path):
         f(local_path, out_path, **kwargs)
@@ -396,7 +399,7 @@ def generate_with_cache(f, local_path, selectors, dont_cache=False, **kwargs):
     
 def has_cache(local_path, selectors):
     name = replace_ext(os.path.basename(local_path), '')
-    out_path = os.path.join(local_cache_dir, f'{'_'.join(f'{str(k)}={str(v)}' for k,v in selectors.items())}_{name}.mp4')
+    out_path = os.path.join(local_cache_dir, f'{selectors_join(selectors)}_{name}.mp4')
     
     return os.path.exists(out_path)
     
