@@ -1,8 +1,11 @@
+import subprocess
+
 from backend import Job, set_queue, init_thread, stop_thread
-import os
+import os, sys, argparse
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from flask_socketio import SocketIO, emit
 import traceback
+import platform
 from typing import List
 
 UPLOAD_FOLDER = "uploads"
@@ -10,7 +13,7 @@ SONGS_FOLDER = "songs"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SONGS_FOLDER, exist_ok=True)
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app)
 playlist = []
 current_song = None
 
@@ -119,10 +122,19 @@ def cb(job, error):
     else:
         print(f'{job.tid} is available at {job.out_path} ({job.status})')
 
-init_thread(cb)
+def create_app():
+    init_thread(cb)
+    print("Done creating App")
+    return app
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--release", help="release mode",action="store_true")
+    args = parser.parse_args()
     try:
-        socketio.run(app, debug=True, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True, use_reloader=False)
+        if args.release and platform.system() == 'Linux':
+            subprocess.run(['gunicorn','-w','4','frontend:create_app()'])
+        else:
+            socketio.run(create_app(), debug=True, host="0.0.0.0", port=8000, allow_unsafe_werkzeug=True, use_reloader=False)
     finally:
         stop_thread()
