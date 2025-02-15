@@ -207,7 +207,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         if args.release and platform.system() == 'Linux':
-            subprocess.run(['gunicorn','-w','4','frontend:create_app()'])
+            subprocess.run(['gunicorn', '-b', '0.0.0.0', '-w','4','frontend:create_app()'])
         else:
             socketio.run(create_app(), debug=True, host="0.0.0.0", port=8000, allow_unsafe_werkzeug=True, use_reloader=False)
     finally:
