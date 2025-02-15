@@ -20,7 +20,8 @@ def get_current_song():
         if job.status == "done":
             if current_song is None or current_song.tid != job.tid:
                 current_song = job
-                socketio.emit("player_updated", {"current_song": job.out_path})
+                socketio.emit("player_updated", {"current_song": job.out_path,
+                                "in_process":any(job.status == "processing" for job in playlist)})
             return job
     current_song = None
     return None
@@ -33,7 +34,8 @@ def next_song():
         set_queue(playlist)
     current_song = get_current_song()
     socketio.emit("playlist_updated", serialize_playlist())
-    socketio.emit("player_updated", {"current_song": current_song.out_path if current_song else None})
+    socketio.emit("player_updated", {"current_song": current_song.out_path if current_song else None,
+                                     "in_process":any(job.status == "processing" for job in playlist)})
     return "", 204
 
 @app.route("/")
@@ -71,7 +73,8 @@ def serve_song_file(filename):
 @socketio.on("connect")
 def on_connect():
     emit("playlist_updated", serialize_playlist())
-    emit("player_updated", {"current_song": current_song.out_path if current_song else None})
+    emit("player_updated", {"current_song": current_song.out_path if current_song else None,
+                            "in_process":any(job.status == "processing" for job in playlist)})
 
 
 @socketio.on("remove_song")
@@ -79,7 +82,7 @@ def handle_remove_song(index):
     global playlist, current_song
     i = int(index)
     if 0 <= i < len(playlist):
-        if playlist[i] != current_song:
+        if playlist[i] != get_current_song():
             del playlist[i]
             set_queue(playlist)
             socketio.emit("playlist_updated", serialize_playlist())
@@ -105,6 +108,9 @@ def serialize_playlist():
 
 def job_status_callback(updated_job):
     socketio.emit("playlist_updated", serialize_playlist())
+    if not current_song:
+        socketio.emit("player_updated", {"current_song": current_song.out_path if current_song else None,
+                            "in_process": any(job.status == "processing" for job in playlist)})
 
 def cb(job, error):
     job_status_callback(job)

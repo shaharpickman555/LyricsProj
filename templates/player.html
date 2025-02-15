@@ -43,7 +43,14 @@
         `;
         addNextSongEventListener();
       } else {
-        videoContainer.innerHTML = `<p class="no-song text-muted">No songs available to play.</p>`;
+        if (data.in_process) {
+          videoContainer.innerHTML = `<p class="no-song text-muted">No songs available to play,
+            Waiting for songs to finish processing</p>`;
+        }
+        else {
+          videoContainer.innerHTML = `<p class="no-song text-muted">No songs available to play,
+            Nothing is in process</p>`;
+        }
       }
     });
     function addNextSongEventListener() {
