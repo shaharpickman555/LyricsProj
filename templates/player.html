@@ -10,7 +10,7 @@
 </head>
 <body class="text-center bg-light py-4">
   <div class="container">
-    <h1 class="text-primary">Now Playing</h1>
+    <h1 class="text-primary">Now Playing - Room: {{ room_id }}</h1>
 
     <div id="player-container" class="bg-white p-4 rounded shadow">
       {% if current_song %}
@@ -29,6 +29,14 @@
 
   <script>
     var socket = io();
+    const roomId = "{{ room_id }}";
+
+    // Join the same room so we get updates
+    socket.on('connect', () => {
+      socket.emit("join_room", { room_id: roomId });
+      console.log("Connected to Socket.IO server in player, room:", roomId);
+    });
+
     socket.on("player_updated", function(data) {
       var videoContainer = document.getElementById("player-container");
       if (data.current_song) {
@@ -44,27 +52,26 @@
         addNextSongEventListener();
       } else {
         if (data.in_process) {
-          videoContainer.innerHTML = `<p class="no-song text-muted">No songs available to play,
-            Waiting for songs to finish processing</p>`;
-        }
-        else {
-          videoContainer.innerHTML = `<p class="no-song text-muted">No songs available to play,
-            Nothing is in process</p>`;
+          videoContainer.innerHTML = `<p class="no-song text-muted">No songs are done yet; waiting on processing.</p>`;
+        } else {
+          videoContainer.innerHTML = `<p class="no-song text-muted">No songs available to play.</p>`;
         }
       }
     });
+
     function addNextSongEventListener() {
-    var form = document.getElementById("nextSongForm");
-    if (form) {
-      form.addEventListener("submit", function (event) {
-        event.preventDefault();
-        fetch("/next_song", { method: "POST" })
-          .then(response => console.log("Next song request sent."))
-          .catch(error => console.error("Error requesting next song:", error));
-      });
+      var form = document.getElementById("nextSongForm");
+      if (form) {
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          fetch("/next_song/" + roomId, { method: "POST" })
+            .then(response => console.log("Next song request for room:", roomId))
+            .catch(error => console.error("Error requesting next song:", error));
+        });
+      }
     }
-  }
-  document.addEventListener("DOMContentLoaded", addNextSongEventListener);
+
+    document.addEventListener("DOMContentLoaded", addNextSongEventListener);
   </script>
 </body>
 </html>

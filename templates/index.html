@@ -34,7 +34,7 @@
       margin-right: 10px;
     }
     .status {
-      width: 30px;
+      width: 40px;
       text-align: center;
     }
   </style>
@@ -42,9 +42,9 @@
 <body>
 
 <div class="container">
-  <h1 class="text-center">Karaoke Playlist</h1>
+  <h1 class="text-center">Karaoke Playlist - Room: {{ room_id }}</h1>
 
-  <form action="{{ url_for('add_song') }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow">
+  <form action="{{ url_for('add_song', room_id=room_id) }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow">
     <div class="row g-3">
       <div class="col-md-6">
         <label for="youtube_url">YouTube URL</label>
@@ -57,10 +57,10 @@
     </div>
 
     <div class="mt-3">
-      <label class="form-check-label">
+      <label class="form-check-label me-3">
         <input type="radio" name="keep" value="nothing" checked> Make Full Karaoke
       </label>
-      <label class="form-check-label">
+      <label class="form-check-label me-3">
         <input type="radio" name="keep" value="video"> Just Remove Vocals
       </label>
       <label class="form-check-label">
@@ -81,19 +81,18 @@
           <span class="drag-handle">☰</span>
           <div class="flex-grow-1 text-start">
             <span class="title">
-              {% if job.is_playing %}
-                🎵
-              {% endif %}
+              {% if job.is_playing %}🎵 {% endif %}
               {{ job.title }}
             </span>
             <span class="status">{{ job.status }}</span>
           </div>
           {% if not job.is_playing %}
-            <button class="remove-btn" data-index="{{ loop.index0 }}">❌</button>
+            <button class="remove-btn btn btn-sm btn-danger" data-index="{{ loop.index0 }}">❌</button>
           {% endif %}
         </li>
       {% endfor %}
     </ul>
+
     <div class="d-flex justify-content-center mt-3">
       <button id="nextSongBtn" class="btn btn-danger w-50">Next Song ⏭️</button>
     </div>
@@ -103,9 +102,12 @@
 <script>
   document.addEventListener("DOMContentLoaded", () => {
     const socket = io();
+    const roomId = "{{ room_id }}";
 
+    // Join this room on connect
     socket.on('connect', () => {
-      console.log("Connected to Socket.IO server");
+      socket.emit("join_room", { room_id: roomId });
+      console.log("Connected to Socket.IO server, joined room:", roomId);
     });
 
     function getStatusIcon(status) {
@@ -118,10 +120,12 @@
       }
     }
 
+    // Listen for full playlist updates
     socket.on("playlist_updated", (updatedPlaylist) => {
-      console.log("Playlist updated:", updatedPlaylist);
+      console.log("Playlist updated in room", roomId, updatedPlaylist);
       const playlistEl = document.getElementById("playlist");
       playlistEl.innerHTML = "";
+
       updatedPlaylist.forEach((job, index) => {
         const li = document.createElement("li");
         li.dataset.index = index;
@@ -141,28 +145,35 @@
       });
     });
 
+    // Remove song
     $(document).on("click", ".remove-btn", function() {
       const index = $(this).data("index");
-      socket.emit("remove_song", index);
+      socket.emit("remove_song", { room_id: roomId, index: index });
     });
 
+    // Next song
     document.getElementById("nextSongBtn").addEventListener("click", function() {
-    fetch("/next_song", { method: "POST" })
-      .then(response => console.log("Next song request sent."))
-      .catch(error => console.error("Error requesting next song:", error));
+      fetch(`/next_song/${roomId}`, { method: "POST" })
+        .then(response => console.log("Next song request sent for room:", roomId))
+        .catch(error => console.error("Error requesting next song:", error));
     });
 
+    // Make the list sortable, but not for the currently playing song
     new Sortable(document.getElementById("playlist"), {
       handle: ".drag-handle",
       animation: 150,
       onStart: function (evt) {
         const item = evt.item;
         if (item.classList.contains("playing-song")) {
-          evt.preventDefault();
+          evt.preventDefault(); // Stop dragging the playing song
         }
       },
       onEnd: function (evt) {
-        socket.emit("reorder_playlist", { oldIndex: evt.oldIndex, newIndex: evt.newIndex });
+        socket.emit("reorder_playlist", {
+          room_id: roomId,
+          oldIndex: evt.oldIndex,
+          newIndex: evt.newIndex
+        });
       }
     });
   });
