@@ -37,8 +37,10 @@ def set_model_framework(model_framework):
     whisper_models = whisper_model_frameworks[model_framework]
     
     if model_framework == 'faster':
+        global WhisperModel
         from faster_whisper import WhisperModel
     elif model_framework == 'whisperx':
+        global whisperx
         import whisperx
     else:
         raise ValueError(f'Unknown framework: {model_framework}')
