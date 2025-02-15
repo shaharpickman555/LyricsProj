@@ -5,21 +5,99 @@
   <title>Select Room</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 </head>
 <body class="bg-light">
   <div class="container py-4">
     <h1>Welcome to Karaoke App</h1>
-    <p>Create or enter a room:</p>
-    <form action="{{ url_for('create_room') }}" method="POST" class="row g-3">
+    <p>Create or enter a room (opens playlist in new tab):</p>
+
+    <form id="createRoomForm" class="row g-3 mb-4">
       <div class="col-auto">
-        <input type="text" name="room_id" class="form-control" placeholder="Room ID">
+        <input type="text" name="room_id" id="roomInput" class="form-control" placeholder="Room ID">
       </div>
       <div class="col-auto">
-        <button type="submit" class="btn btn-primary">Enter or Create Room</button>
+        <button type="submit" class="btn btn-primary">Enter / Create Room</button>
       </div>
     </form>
+
     <hr>
-    <p class="text-muted">Share the room link with friends so they can join the same room!</p>
+    <h3>Existing Rooms</h3>
+    <div id="rooms-container"></div>
   </div>
+
+  <script>
+    var socket = io();
+
+    socket.on('connect', () => {
+      console.log("Connected to Socket.IO for rooms list");
+    });
+
+    socket.on("rooms_list_updated", (roomList) => {
+      const container = document.getElementById("rooms-container");
+      container.innerHTML = "";
+
+      if(roomList.length === 0) {
+        container.innerHTML = "<p class='text-muted'>No rooms available yet.</p>";
+        return;
+      }
+
+      let html = "<ul class='list-group'>";
+      roomList.forEach((rid) => {
+        html += `
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>${rid}</strong>
+            <div>
+              <a href="/${rid}" class="btn btn-sm btn-success" target="_blank">Playlist</a>
+              <a href="/player/${rid}" class="btn btn-sm btn-warning" target="_blank">Player</a>
+              <button class="btn btn-sm btn-danger ms-2 remove-room-btn" data-rid="${rid}">Remove Room</button>
+            </div>
+          </li>
+        `;
+      });
+      html += "</ul>";
+      container.innerHTML = html;
+    });
+
+    document.getElementById("createRoomForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const roomId = document.getElementById("roomInput").value.trim();
+      if(!roomId) return;
+
+      fetch("/api/create_room", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: "room_id=" + encodeURIComponent(roomId)
+      })
+      .then(res => res.json())
+      .then(json => {
+        if(json.error) {
+          alert(json.error);
+        } else {
+          window.open("/" + json.room_id, "_blank");
+        }
+      })
+      .catch(err => console.error("Error creating room:", err));
+    });
+
+    $(document).on("click", ".remove-room-btn", function() {
+      const rid = $(this).data("rid");
+      fetch("/api/remove_room", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: "room_id=" + encodeURIComponent(rid)
+      })
+      .then(res => res.json())
+      .then(json => {
+        if(json.error) {
+          alert(json.error);
+        } else {
+          console.log("Room removed:", json.removed);
+        }
+      })
+      .catch(err => console.error("Error removing room:", err));
+    });
+  </script>
 </body>
 </html>
