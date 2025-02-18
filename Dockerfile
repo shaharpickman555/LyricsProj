@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 USER root
 WORKDIR /app
 
@@ -48,4 +48,4 @@ RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=dem
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 EXPOSE 8000
 EXPOSE 22
-CMD ["sh", "-c", "service ssh start; git pull origin main; exec python frontend.py --release"]
+CMD ["sh", "-c", "service ssh start; git pull origin main; exec python frontend.py"]
