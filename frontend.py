@@ -75,7 +75,7 @@ def next_song(room_id):
     new_current = data["current_song"]
     socketio.emit("player_updated", {
         "current_song": new_current.out_path if new_current else None,
-        "in_process": any(j.status == "processing" for j in playlist)
+        "in_process": any(j.status == "processing" for j in playlist),
     }, to=room_id)
     return "", 204
 
@@ -116,7 +116,7 @@ def get_current_song(room_id):
                 data["current_song"] = job
                 socketio.emit("player_updated", {
                     "current_song": job.out_path,
-                    "in_process": any(j.status == "processing" for j in playlist)
+                    "in_process": any(j.status == "processing" for j in playlist),
                 }, to=room_id)
             return job
     data["current_song"] = None
@@ -136,7 +136,7 @@ def handle_join_room(data):
     current = get_or_create_room(room_id)["current_song"]
     emit("player_updated", {
         "current_song": current.out_path if current else None,
-        "in_process": any(j.status == "processing" for j in get_or_create_room(room_id)["playlist"])
+        "in_process": any(j.status == "processing" for j in get_or_create_room(room_id)["playlist"]),
     })
 
 @socketio.on("remove_song")
@@ -172,6 +172,7 @@ def serialize_playlist(room_id):
         result.append({
             "title": j.title,
             "status": j.status,
+            "progress": j.progress,
             "is_playing": (current is not None and j.tid == current.tid),
             "out_path": getattr(j, "out_path", "")
         })
@@ -185,15 +186,19 @@ def job_status_callback(updated_job):
                 csong = get_current_song(rid)
                 socketio.emit("player_updated", {
                     "current_song": csong.out_path if csong else None,
-                    "in_process": any(j.status == "processing" for j in rdata["playlist"])
+                    "in_process": any(j.status == "processing" for j in rdata["playlist"]),
                 }, to=rid)
             break
 
 def cb(job, error):
     job_status_callback(job)
+    
+    #TODO remove on release
     if error:
         print(f'{job.tid} error: ', traceback.format_exc(error))
-    else:
+    elif job.status == 'processing':
+            print(f'progress: {100*job.progress:.2f}%')
+    elif job.status == 'done':
         print(f'{job.tid} is available at {job.out_path} ({job.status})')
 
 def create_app():

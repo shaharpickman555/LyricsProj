@@ -17,6 +17,22 @@ model_size_str = 'large-v3' if has_juice else 'tiny'
 
 Word = namedtuple('Word', ['word', 'start', 'end'])
 
+YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
+
+LOAD_TRANSCRIBE_MODEL_PROGRESS = 0.1 #10% load, 90% process
+
+LOAD_SEPARATOR_MODEL_PROGRESS = 0.1
+SEPARATOR_MODEL_PROGRESS = 0.75 #10% load, 75% process, 15% save
+
+LYRICS_VIDEO_SEPARATOR_PROGRESS = 0.5
+LYRICS_VIDEO_TRANSCRIBE_PROGRESS_FASTER = 0.05
+LYRICS_VIDEO_ALIGN_PROGRESS_FASTER = 0.3  #50% separator, 5% transcribe, 30% align (actually transcribing), 15% ffmpeg
+
+LYRICS_VIDEO_TRANSCRIBE_PROGRESS_WHISPERX = 0.3
+LYRICS_VIDEO_ALIGN_PROGRESS_WHISPERX = 0.05  #50% separator, 30% transcribe, 5% align, 15% ffmpeg
+
+REMOVE_VOCALS_SEPARATOR_PROGRESS = 5/7
+
 whisper_model_frameworks = {
                     'faster':
                     {
@@ -31,9 +47,11 @@ whisper_model_frameworks = {
                  }
 
 whisper_models = None
+whisper_model_framework = None
 def set_model_framework(model_framework):
-    global whisper_models
+    global whisper_models, whisper_model_framework
     whisper_models = whisper_model_frameworks[model_framework]
+    whisper_model_framework = model_framework
     
     if model_framework == 'faster':
         global WhisperModel
@@ -43,16 +61,15 @@ def set_model_framework(model_framework):
         import whisperx
     else:
         raise ValueError(f'Unknown framework: {model_framework}')
-    
-def import_model_module():
-    global whisper_models
-    
-    
 
 loaded_model_desc = None
 loaded_model = None
-def transcribe_audio(audio, lang_hint=None):
+def transcribe_audio(audio, lang_hint=None, progress_cb=None):
     global loaded_model_desc, loaded_model
+    
+    if progress_cb:
+        progress_cb(0.0)
+    
     model_desc = whisper_models.get(lang_hint, whisper_models[None])
     
     model_name, model_framework = model_desc
@@ -67,24 +84,36 @@ def transcribe_audio(audio, lang_hint=None):
         else:
             raise ValueError(f'unknown model {model_desc}')
         print(f'loaded model {model_framework} {model_name} to {device_str}')
-        
+    
+    if progress_cb:
+        progress_cb(LOAD_TRANSCRIBE_MODEL_PROGRESS)
+    
     if model_framework == 'whisperx' and isinstance(audio, str):
         #path
         audio = whisperx.load_audio(audio)
     
     result = loaded_model.transcribe(audio, **transcribe_options)
+    
     language = result.get('language') if isinstance(result, dict) else result[1].language
     
     if model_desc != whisper_models.get(language, whisper_models[None]):
         #try again with correct language hint
-        return transcribe_audio(audio, lang_hint=language)
+        
+        #cannot report meaningful progress here on either model
+        result, audio = transcribe_audio(audio, lang_hint=language, progress_cb=None) 
     
+    if progress_cb:
+        progress_cb(1.0)
+        
     return result, audio
     
 loaded_align_model_lang = None
 loaded_align_model = None
-def align_audio(transcribe_result):
+def align_audio(transcribe_result, progress_cb=None):
     global loaded_align_model_lang, loaded_align_model
+    
+    if progress_cb:
+        progress_cb(0.0)
     
     model_result, audio = transcribe_result
     
@@ -92,17 +121,28 @@ def align_audio(transcribe_result):
     
     if need_alignment:
         #whisperX
+        # no meaningful progress to report
+        
         language = model_result['language']
         if loaded_align_model_lang != language:
             loaded_align_model = whisperx.load_align_model(language_code=language, device=device_str)
             loaded_align_model_lang = language
-            
+
         model_result = whisperx.align(model_result['segments'], *loaded_align_model, audio, return_char_alignments=False, device=device_str)
-        return [[Word(word=f' {w["word"]}', start=w['start'], end=w['end']) for w in segment.get('words', segment['word_segments'])] for segment in model_result['segments']]
+
+        segments = [[Word(word=f' {w["word"]}', start=w['start'], end=w['end']) for w in segment.get('words', segment.get('word_segments'))] for segment in model_result['segments']]
     else:
         #faster
         result, info = model_result
-        return [segment.words for segment in result]
+        segments = []
+        for segment in result:
+            segments.append(segment.words)
+            if progress_cb:
+                progress_cb(segment.end / info.duration_after_vad)
+    
+    if progress_cb:
+        progress_cb(1.0)
+    return segments
 
 loaded_separator = None
 def load_separator():
@@ -132,7 +172,10 @@ def youtube_info(url):
         
     return info['id'], info['title']
 
-def youtube_download(url, local_dir, audio_only=True, dont_cache=False):
+def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress_cb=None):
+    if progress_cb:
+        progress_cb(0.0)
+        
     ext = 'mp3' if audio_only else 'mp4'
     ydl_opts = {
         'format': 'mp4',
@@ -149,6 +192,9 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False):
         outfile = os.path.join(local_dir, f'{info["id"]}.{ext}')
         if not os.path.exists(outfile) and not dont_cache:
             ydl.extract_info(url, download=True)
+            
+    if progress_cb:
+        progress_cb(1.0)
     return outfile, info['title']
 
 def segment(result):
@@ -309,8 +355,23 @@ Format: Layer, Start, End, Style, Text
 
     return header + '\n'.join(ass_lines)
 
-def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_silence=0):
+def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_silence=0, progress_cb=None):
+    if progress_cb:
+        progress_cb(0.0)
+        
     separator = load_separator()
+    
+    if progress_cb:
+        progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS)
+         
+    def separator_cb(data):
+        if data['state'] != 'start':
+            return
+        progress = data['segment_offset'] / data['audio_length']
+        if progress_cb:
+            progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS + (progress * SEPARATOR_MODEL_PROGRESS))
+    
+    separator.update_parameter(callback=separator_cb)
 
     origin, separated = separator.separate_audio_file(input)
     inst = origin - separated['vocals']
@@ -319,34 +380,56 @@ def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_si
     silence2 = torch.zeros([2, end_silence * separator.samplerate])
 
     inst = torch.cat((silence1, inst, silence2), dim=-1)
+    
+    if progress_cb:
+        progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS + SEPARATOR_MODEL_PROGRESS)
 
     if output_vocals:
         vocals = torch.cat((silence1, separated['vocals'], silence2), dim=-1)
         demucs.api.save_audio(vocals, output_vocals, samplerate=separator.samplerate)
 
     demucs.api.save_audio(inst, output_inst, samplerate=separator.samplerate)
+    
+    if progress_cb:
+        progress_cb(1.0)
 
-def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remove_intermediates=True):
+def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None):
+    global whisper_model_framework
+    
+    if progress_cb:
+        progress_cb(0.0)
+        
+    transcribe_progress, align_progress = dict(faster=(LYRICS_VIDEO_TRANSCRIBE_PROGRESS_FASTER, LYRICS_VIDEO_ALIGN_PROGRESS_FASTER),
+                                               whisperx=(LYRICS_VIDEO_TRANSCRIBE_PROGRESS_WHISPERX, LYRICS_VIDEO_ALIGN_PROGRESS_WHISPERX))[whisper_model_framework]
+        
+    def instrumental_progress_cb(progress):
+        if progress_cb:
+            progress_cb(progress * LYRICS_VIDEO_SEPARATOR_PROGRESS)
+            
+    def transcribe_progress_cb(progress):
+        if progress_cb:
+            progress_cb(LYRICS_VIDEO_SEPARATOR_PROGRESS + (progress * transcribe_progress))
+            
+    def align_progress_cb(progress):
+        if progress_cb:
+            progress_cb(LYRICS_VIDEO_SEPARATOR_PROGRESS + transcribe_progress + (progress * align_progress))
+    
     asspath = replace_ext(audiopath, '.ass')
     instpath = replace_ext(audiopath, '_inst.mp3')
     vocalspath = replace_ext(audiopath, '_vocals.mp3') if transcribe_using_vocals else None
-
-    t1 = time.time()
-
+    
     silence = 1
-    instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence)
+    instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
 
     if transcribe_using_vocals:
         silence = 0
         #use vocals only
         audiopath = vocalspath
         
-    result = transcribe_audio(audiopath)
-    segments = align_audio(result)
-
+    result = transcribe_audio(audiopath, progress_cb=transcribe_progress_cb)
+    segments = align_audio(result, progress_cb=align_progress_cb)
     segments = segment(segments)
     assdata = make_ass_swap(segments, offset=silence + 0.0)
-
 
     open(asspath, 'w', encoding='utf8').write(assdata)
 
@@ -359,14 +442,20 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remov
             os.remove(asspath)
             os.remove(instpath)
             os.remove(vocalspath)
+    
+    if progress_cb:
+        progress_cb(1.0)
 
-    t2 = time.time()
-
-    print(f't: {t2 - t1}')
-
-def remove_vocals_from_video(mp4_input, output_path):
+def remove_vocals_from_video(mp4_input, output_path, progress_cb=None):
+    if progress_cb:
+        progress_cb(0.0)
+        
+    def instrumental_progress_cb(progress):
+        if progress_cb:
+            progress_cb(progress * REMOVE_VOCALS_SEPARATOR_PROGRESS)
+        
     instpath = replace_ext(mp4_input, '_inst.mp3')
-    instrumental(mp4_input, instpath)
+    instrumental(mp4_input, instpath, progress_cb=instrumental_progress_cb)
     mp4_input_name, mp4_input_ext = os.path.splitext(mp4_input)
     new_mp4_input = f'{mp4_input_name}-original{mp4_input_ext}'
     os.rename(mp4_input, new_mp4_input)
@@ -378,8 +467,17 @@ def remove_vocals_from_video(mp4_input, output_path):
         pass
         os.remove(instpath)
         
-def passthrough(input, output):
+    if progress_cb:
+        progress_cb(1.0)
+        
+def passthrough(input, output, progress_cb=None):
+    if progress_cb:
+        progress_cb(0.0)
+        
     shutil.copy(input, output)
+    
+    if progress_cb:
+        progress_cb(1.0)
         
 def digest(path=None, content=None):
     return base64.b64encode(hashlib.sha256(open(path, 'rb').read() if path else content).digest()[:15], altchars=b'+-').decode()
@@ -431,6 +529,7 @@ class Job:
     arg : dict = None
     
     #can change
+    progress : float = 0.0
     status : str = 'idle'
     out_path : str = None
     
@@ -464,6 +563,9 @@ class Job:
         object.__setattr__(self, 'status', status)
         if out_path:
             object.__setattr__(self, 'out_path', out_path)
+            
+    def update_progress_locked(self, progress):
+        object.__setattr__(self, 'progress', progress)
 
 
 def raise_exception_in_thread(thread, e):
@@ -480,6 +582,18 @@ default_model_type = 'faster'
 
 def work_loop():
     global should_stop, job_queue, lock, event, job_status_cb
+    
+    def progress_cb(progress):
+        with lock:
+            job.update_progress_locked(progress)
+        job_status_cb(job, None)
+    
+    def youtube_progress_cb(progress):
+        progress_cb(progress * YOUTUBE_DOWNLOAD_PROGRESS)
+    
+    def process_cb(progress):
+        progress_cb(YOUTUBE_DOWNLOAD_PROGRESS + (progress * (1 - YOUTUBE_DOWNLOAD_PROGRESS)))
+        
     try:
         while not should_stop:
             job = None
@@ -507,7 +621,7 @@ def work_loop():
                 #TODO cache youtube download?
                 
                 if job.url is not None:
-                    download_path, title = youtube_download(job.url, local_upload_dir, audio_only=job.keep == 'nothing', dont_cache=job.no_cache)
+                    download_path, title = youtube_download(job.url, local_upload_dir, audio_only=job.keep == 'nothing', dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
                     path = canonify_input_file(content=open(download_path, 'rb').read()) #don't delete youtube video file
                 elif job.path is not None:
                     path = canonify_input_file(path=job.path)
@@ -515,7 +629,7 @@ def work_loop():
                     path = canonify_input_file(content=job.data)
                 
                 set_model_framework(job.model_type or default_model_type)
-                output = generate_with_cache(actions[job.keep], path, selectors=dict(keep=job.keep), dont_cache=job.no_cache)
+                output = generate_with_cache(actions[job.keep], path, selectors=dict(keep=job.keep), dont_cache=job.no_cache, progress_cb=process_cb)
                 
                 #TODO remove canon input file?
                 
@@ -584,7 +698,9 @@ def thread_test():
     def cb(job, error):
         if error:
             print(f'{job.tid} error: ', traceback.format_exc(error))
-        else:
+        elif job.status == 'processing':
+            print(f'progress: {100*job.progress:.2f}%')
+        elif job.status == 'done':
             print(f'{job.tid} is available at {job.out_path} ({job.status})')
             
     init_thread(cb)
@@ -624,7 +740,7 @@ def main(argv):
     parser.add_argument(
         '-t', '--model-type',
         type=str,
-        default='whisperx',
+        default=default_model_type,
         help='change between faster whisper (faster) & whisperX (whisperx)'
     )
     parser.add_argument(
@@ -641,13 +757,22 @@ def main(argv):
     set_model_framework(args.model_type)
 
     input = args.input
+    
+    def progress_cb(progress):
+        print(f'progress: {100*progress:.2f}%')
+    
+    def youtube_progress_cb(progress):
+        progress_cb(progress * YOUTUBE_DOWNLOAD_PROGRESS)
+    
+    def process_cb(progress):
+        progress_cb(YOUTUBE_DOWNLOAD_PROGRESS + (progress * (1 - YOUTUBE_DOWNLOAD_PROGRESS)))
 
     if not os.path.isfile(input):  # YT Link
-        input, title = youtube_download(input, local_upload_dir, audio_only=not args.keep_video)
+        input, title = youtube_download(input, local_upload_dir, audio_only=not args.keep_video, progress_cb=youtube_progress_cb)
         
     input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
-    generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(keep='video' if args.keep_video else 'nothing'), dont_cache=args.dont_use_cache)
+    generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(keep='video' if args.keep_video else 'nothing'), dont_cache=args.dont_use_cache, progress_cb=process_cb)
 
 if __name__ == '__main__':
-    main(sys.argv)
-    #thread_test()
+    #main(sys.argv)
+    thread_test()
