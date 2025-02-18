@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
 USER root
 WORKDIR /app
 
@@ -42,10 +42,11 @@ RUN pip install --no-cache-dir -U \
     lameenc \
     openunmix
 RUN pip install --no-deps torchaudio
+RUN pip install ctranslate2 -U
 RUN rm -f /opt/conda/lib/python3.11/site-packages/distutils-precedence.pth
 RUN pip install -U setuptools
 RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=demucs
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 EXPOSE 8000
 EXPOSE 22
-CMD ["sh", "-c", "service ssh start; git pull origin main; exec python frontend.py"]
+CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; service ssh start; git pull origin main; exec python frontend.py"]
