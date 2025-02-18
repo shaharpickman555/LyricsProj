@@ -42,9 +42,9 @@ RUN pip install --no-cache-dir -U \
     lameenc \
     openunmix
 RUN pip install --no-deps torchaudio
-RUN pip install ctranslate2 -U
 RUN rm -f /opt/conda/lib/python3.11/site-packages/distutils-precedence.pth
 RUN pip install -U setuptools
+RUN pip install ctranslate2 -U
 RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=demucs
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 EXPOSE 8000
