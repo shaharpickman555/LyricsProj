@@ -49,4 +49,4 @@ RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=dem
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 EXPOSE 8000
 EXPOSE 22
-CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; service ssh start; git pull origin main; exec python frontend.py"]
+CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; service ssh start; git pull origin main; pip install -U yt-dlp; exec python frontend.py"]
