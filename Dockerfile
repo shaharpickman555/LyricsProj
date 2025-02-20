@@ -7,7 +7,7 @@ ENV TZ=Asia/Jerusalem
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt update && apt install -y software-properties-common
-RUN add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg6
+RUN add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
 RUN apt update && apt install -y --no-install-recommends \
     build-essential \
     ffmpeg \

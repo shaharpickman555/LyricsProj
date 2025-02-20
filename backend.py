@@ -774,5 +774,5 @@ def main(argv):
     generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(keep='video' if args.keep_video else 'nothing'), dont_cache=args.dont_use_cache, progress_cb=process_cb)
 
 if __name__ == '__main__':
-    #main(sys.argv)
-    thread_test()
+    main(sys.argv)
+    #thread_test()
