@@ -25,19 +25,22 @@
         <p class="no-song text-muted">No songs available to play.</p>
       {% endif %}
     </div>
+
+    <!-- New "Open Playlist" button -->
+    <div class="d-flex justify-content-center mt-4">
+      <a href="/{{ room_id }}" target="_blank" class="btn btn-secondary">Open Playlist</a>
+    </div>
   </div>
 
   <script>
     var socket = io();
     const roomId = "{{ room_id }}";
 
-    // Join the same room so we get updates
     socket.on('connect', () => {
       socket.emit("join_room", { room_id: roomId });
       console.log("Connected to Socket.IO server in player, room:", roomId);
     });
 
-    // When a 'player_updated' event is received, either update the video or show a message
     socket.on("player_updated", function(data) {
       var videoContainer = document.getElementById("player-container");
       if (data.current_song) {

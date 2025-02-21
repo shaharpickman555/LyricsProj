@@ -15,7 +15,7 @@
       padding: 20px;
     }
     .playlist-container {
-      max-width: 500px;
+      max-width: 650px;
       margin: auto;
     }
     .playing-song {
@@ -34,11 +34,20 @@
       margin-right: 10px;
     }
     .status {
-      width: 40px;
+      width: 45px;
       text-align: center;
+      margin-left: 10px;
     }
     .progress {
-      margin-top: 6px; /* little spacing above progress bar */
+      margin-top: 6px;
+      flex: 1;
+      min-width: 80px;
+    }
+    .progress-bar {
+      min-width: 45px;
+    }
+    .progress-bar.text-dark {
+      color: #000 !important;
     }
   </style>
 </head>
@@ -95,18 +104,21 @@
               {% else %}{{ job.status }}
               {% endif %}
             </span>
+
             {% if job.status == 'processing' %}
-              <div class="progress mt-2" style="width: 120px; height: 20px;">
-                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+              <div class="progress mt-2">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark"
                      role="progressbar"
                      style="width: {{ (job.progress * 100) | round }}%;"
                      aria-valuenow="{{ (job.progress * 100) | round }}"
-                     aria-valuemin="0" aria-valuemax="100">
+                     aria-valuemin="0"
+                     aria-valuemax="100">
                   {{ (job.progress * 100) | round }}%
                 </div>
               </div>
             {% endif %}
           </div>
+
           {% if not job.is_playing %}
             <button class="remove-btn btn btn-sm btn-danger" data-index="{{ loop.index0 }}">❌</button>
           {% endif %}
@@ -115,7 +127,9 @@
     </ul>
 
     <div class="d-flex justify-content-center mt-3">
-      <button id="nextSongBtn" class="btn btn-danger w-50">Next Song ⏭️</button>
+      <button id="nextSongBtn" class="btn btn-danger w-25 me-3">Next Song ⏭️</button>
+      <!-- New "Open Player" Button -->
+      <a href="/player/{{ room_id }}" target="_blank" class="btn btn-secondary w-25">Open Player</a>
     </div>
   </div>
 </div>
@@ -132,17 +146,16 @@
 
     function getStatusIcon(status) {
       switch (status) {
-        case "idle": return "⌛";
+        case "idle":       return "⌛";
         case "processing": return "🔄";
-        case "done": return "✅";
-        case "error": return "❌";
-        default: return status;
+        case "done":       return "✅";
+        case "error":      return "❌";
+        default:           return status;
       }
     }
 
-    // Re-render the playlist with progress bars
+    // Re-render playlist
     socket.on("playlist_updated", (updatedPlaylist) => {
-      console.log("Playlist updated in room", roomId, updatedPlaylist);
       const playlistEl = document.getElementById("playlist");
       playlistEl.innerHTML = "";
 
@@ -154,7 +167,6 @@
           li.classList.add("playing-song");
         }
 
-        // Build the main HTML
         let html = `
           <span class="drag-handle">☰</span>
           <div class="flex-grow-1 text-start">
@@ -162,12 +174,11 @@
             <span class="status">${getStatusIcon(job.status)}</span>
         `;
 
-        // If it's processing, show a nice progress bar
         if (job.status === "processing") {
           const pct = Math.round(job.progress * 100);
           html += `
-            <div class="progress mt-2" style="width: 120px; height: 20px;">
-              <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+            <div class="progress mt-2">
+              <div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark"
                    role="progressbar"
                    style="width: ${pct}%;"
                    aria-valuenow="${pct}"
@@ -179,10 +190,8 @@
           `;
         }
 
-        // Close the main div
         html += `</div>`;
 
-        // Remove button if not playing
         if (!job.is_playing) {
           html += `<button class="remove-btn btn btn-sm btn-danger" data-index="${index}">❌</button>`;
         }
@@ -192,27 +201,27 @@
       });
     });
 
-    // Handle removing a song
+    // Remove song
     $(document).on("click", ".remove-btn", function() {
       const index = $(this).data("index");
       socket.emit("remove_song", { room_id: roomId, index: index });
     });
 
-    // Next song
+    // Next Song
     document.getElementById("nextSongBtn").addEventListener("click", function() {
       fetch(`/next_song/${roomId}`, { method: "POST" })
         .then(response => console.log("Next song request sent for room:", roomId))
         .catch(error => console.error("Error requesting next song:", error));
     });
 
-    // Make the list sortable
+    // Sortable
     new Sortable(document.getElementById("playlist"), {
       handle: ".drag-handle",
       animation: 150,
       onStart: function (evt) {
         const item = evt.item;
         if (item.classList.contains("playing-song")) {
-          evt.preventDefault(); // Stop dragging the playing song
+          evt.preventDefault();
         }
       },
       onEnd: function (evt) {
