@@ -37,6 +37,9 @@
       width: 40px;
       text-align: center;
     }
+    .progress {
+      margin-top: 6px; /* little spacing above progress bar */
+    }
   </style>
 </head>
 <body>
@@ -84,7 +87,25 @@
               {% if job.is_playing %}🎵 {% endif %}
               {{ job.title }}
             </span>
-            <span class="status">{{ job.status }}</span>
+            <span class="status">
+              {% if job.status == 'idle' %}⌛
+              {% elif job.status == 'processing' %}🔄
+              {% elif job.status == 'done' %}✅
+              {% elif job.status == 'error' %}❌
+              {% else %}{{ job.status }}
+              {% endif %}
+            </span>
+            {% if job.status == 'processing' %}
+              <div class="progress mt-2" style="width: 120px; height: 20px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                     role="progressbar"
+                     style="width: {{ (job.progress * 100) | round }}%;"
+                     aria-valuenow="{{ (job.progress * 100) | round }}"
+                     aria-valuemin="0" aria-valuemax="100">
+                  {{ (job.progress * 100) | round }}%
+                </div>
+              </div>
+            {% endif %}
           </div>
           {% if not job.is_playing %}
             <button class="remove-btn btn btn-sm btn-danger" data-index="{{ loop.index0 }}">❌</button>
@@ -104,7 +125,6 @@
     const socket = io();
     const roomId = "{{ room_id }}";
 
-    // Join this room on connect
     socket.on('connect', () => {
       socket.emit("join_room", { room_id: roomId });
       console.log("Connected to Socket.IO server, joined room:", roomId);
@@ -116,11 +136,11 @@
         case "processing": return "🔄";
         case "done": return "✅";
         case "error": return "❌";
-        default: return "";
+        default: return status;
       }
     }
 
-    // Listen for full playlist updates
+    // Re-render the playlist with progress bars
     socket.on("playlist_updated", (updatedPlaylist) => {
       console.log("Playlist updated in room", roomId, updatedPlaylist);
       const playlistEl = document.getElementById("playlist");
@@ -133,19 +153,46 @@
         if (job.is_playing) {
           li.classList.add("playing-song");
         }
-        li.innerHTML = `
+
+        // Build the main HTML
+        let html = `
           <span class="drag-handle">☰</span>
           <div class="flex-grow-1 text-start">
             <span class="title">${job.is_playing ? "🎵 " : ""}${job.title}</span>
             <span class="status">${getStatusIcon(job.status)}</span>
-          </div>
-          ${job.is_playing ? "" : `<button class="remove-btn btn btn-sm btn-danger" data-index="${index}">❌</button>`}
         `;
+
+        // If it's processing, show a nice progress bar
+        if (job.status === "processing") {
+          const pct = Math.round(job.progress * 100);
+          html += `
+            <div class="progress mt-2" style="width: 120px; height: 20px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                   role="progressbar"
+                   style="width: ${pct}%;"
+                   aria-valuenow="${pct}"
+                   aria-valuemin="0"
+                   aria-valuemax="100">
+                ${pct}%
+              </div>
+            </div>
+          `;
+        }
+
+        // Close the main div
+        html += `</div>`;
+
+        // Remove button if not playing
+        if (!job.is_playing) {
+          html += `<button class="remove-btn btn btn-sm btn-danger" data-index="${index}">❌</button>`;
+        }
+
+        li.innerHTML = html;
         playlistEl.appendChild(li);
       });
     });
 
-    // Remove song
+    // Handle removing a song
     $(document).on("click", ".remove-btn", function() {
       const index = $(this).data("index");
       socket.emit("remove_song", { room_id: roomId, index: index });
@@ -158,7 +205,7 @@
         .catch(error => console.error("Error requesting next song:", error));
     });
 
-    // Make the list sortable, but not for the currently playing song
+    // Make the list sortable
     new Sortable(document.getElementById("playlist"), {
       handle: ".drag-handle",
       animation: 150,
