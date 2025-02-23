@@ -8,18 +8,23 @@ import demucs.api
 import yt_dlp
 from collections import namedtuple
 import torch
+import gc
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 has_juice = torch.cuda.device_count() > 0
 device_str = 'cuda' if has_juice else 'cpu'
 model_size_str = 'large-v3' if has_juice else 'tiny'
+compute_type_str = 'int8' if has_juice else 'int8'
+
+detection_model_name = 'large-v3' if has_juice else 'tiny'
 
 Word = namedtuple('Word', ['word', 'start', 'end'])
 
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
-LOAD_TRANSCRIBE_MODEL_PROGRESS = 0.1 #10% load, 90% process
+DETECT_LANGUAGE_PROGRESS = 0.1
+LOAD_TRANSCRIBE_MODEL_PROGRESS = 0.1 #10% detection, 10% load, 80% process
 
 LOAD_SEPARATOR_MODEL_PROGRESS = 0.1
 SEPARATOR_MODEL_PROGRESS = 0.75 #10% load, 75% process, 15% save
@@ -36,13 +41,13 @@ REMOVE_VOCALS_SEPARATOR_PROGRESS = 5/7
 whisper_model_frameworks = {
                     'faster':
                     {
-                        None: (model_size_str, 'faster'),
-                        #'he': ('ivrit-ai/faster-whisper-v2-d3-e3', 'faster'),
+                        None: (model_size_str, 'faster', {}, {}),
+                        'he': ('ivrit-ai/faster-whisper-v2-d4', 'faster', {}, dict(patience=2, beam_size=5)),
                     },
                     'whisperx':
                     {
-                        None: (model_size_str, 'whisperx'),
-                        #whisperx he?
+                        None: (model_size_str, 'whisperx', {}, {}),
+                        'he': ('ivrit-ai/faster-whisper-v2-d4', 'whisperx', dict(patience=2, beam_size=5), {}),
                     },
                  }
 
@@ -61,47 +66,66 @@ def set_model_framework(model_framework):
         import whisperx
     else:
         raise ValueError(f'Unknown framework: {model_framework}')
+        
+loaded_detection_model = None
+def detect_audio(audio):
+    global loaded_detection_model, WhisperModel
+    
+    from faster_whisper.audio import decode_audio
+
+    if loaded_detection_model is None:
+        from faster_whisper import WhisperModel
+        loaded_detection_model = WhisperModel(detection_model_name, device=device_str, compute_type='int8')
+    
+    audio = decode_audio(audio, sampling_rate=loaded_detection_model.feature_extractor.sampling_rate)
+    
+    lang, conf, scores = loaded_detection_model.detect_language(audio, language_detection_segments=1000)
+    
+    return lang
 
 loaded_model_desc = None
 loaded_model = None
-def transcribe_audio(audio, lang_hint=None, progress_cb=None):
+def transcribe_audio(audio, progress_cb=None):
     global loaded_model_desc, loaded_model
     
     if progress_cb:
         progress_cb(0.0)
+        
+    lang = detect_audio(audio)
+    print('detected: ', lang)
     
-    model_desc = whisper_models.get(lang_hint, whisper_models[None])
+    if progress_cb:
+        progress_cb(DETECT_LANGUAGE_PROGRESS)
     
-    model_name, model_framework = model_desc
+    model_desc = whisper_models.get(lang, whisper_models[None])
+    
+    model_name, model_framework, model_options, transcribe_options = model_desc
     
     if model_desc != loaded_model_desc:
+        print(f'Replacing loaded model -> {model_desc}')
+        loaded_model = None
+        gc.collect()
+        torch.cuda.empty_cache()
+        
         if model_framework == 'faster':
-            loaded_model = WhisperModel(model_name, device=device_str, compute_type='int8')
-            transcribe_options = {'word_timestamps': True}
+            loaded_model = WhisperModel(model_name, device=device_str, compute_type=compute_type_str)
+            transcribe_options['word_timestamps'] = True
         elif model_framework == 'whisperx':
-            loaded_model = whisperx.load_model(model_name, device=device_str, compute_type='int8', vad_options={'vad_onset': 0.05, 'vad_offset': 0.05}, asr_options={'multilingual': True, 'hotwords': None})
-            transcribe_options = {}
+            loaded_model = whisperx.load_model(model_name, device=device_str, compute_type=compute_type_str, vad_options={'vad_onset': 0.05, 'vad_offset': 0.05}, asr_options={'multilingual': True, 'hotwords': None, **model_options})
         else:
             raise ValueError(f'unknown model {model_desc}')
+        loaded_model_desc = model_desc
         print(f'loaded model {model_framework} {model_name} to {device_str}')
     
     if progress_cb:
-        progress_cb(LOAD_TRANSCRIBE_MODEL_PROGRESS)
+        progress_cb(DETECT_LANGUAGE_PROGRESS + LOAD_TRANSCRIBE_MODEL_PROGRESS)
     
     if model_framework == 'whisperx' and isinstance(audio, str):
         #path
         audio = whisperx.load_audio(audio)
     
-    result = loaded_model.transcribe(audio, **transcribe_options)
-    
-    language = result.get('language') if isinstance(result, dict) else result[1].language
-    
-    if model_desc != whisper_models.get(language, whisper_models[None]):
-        #try again with correct language hint
-        
-        #cannot report meaningful progress here on either model
-        result, audio = transcribe_audio(audio, lang_hint=language, progress_cb=None) 
-    
+    result = loaded_model.transcribe(audio, language=lang, **transcribe_options)
+
     if progress_cb:
         progress_cb(1.0)
         
@@ -248,6 +272,25 @@ def dominant_strong_direction(s):
 def ass_time(seconds):
     return f'{int(seconds // 3600)}:{int(seconds % 3600 // 60):02d}:{int(seconds % 60):02d}.{int(seconds * 100 % 100):02d}'
 
+def output_word(word):
+    if dominant_strong_direction(word) == 'rtl':
+        punc = '.,;:/\\?!'
+        word = word.strip()
+        
+        startswith = any(word.startswith(p) for p in punc)
+        endswith = any(word.endswith(p) for p in punc)
+        
+        if startswith and endswith:
+            word = word[-1] + word[1:-1] + word[0]
+        elif startswith:
+            word = word[1:] + word[0]
+        elif endswith:
+            word = word[-1] + word[:-1]
+            
+        return word
+    else:
+        return word.strip()
+    
 def output_line(words, selected_word):
     text_wrap = r'{{\c&H{color}&}}{text}{{\r}}'
     marked_color = '0000FF'
@@ -255,9 +298,9 @@ def output_line(words, selected_word):
 
     direction = dominant_strong_direction(''.join(w.word for w in words))
 
-    wrapped = [text_wrap.format(text=w.word, color=marked_color if w == selected_word else unmarked_colors[i % 2]) for i, w in enumerate(words)]
+    wrapped = [text_wrap.format(text=output_word(w.word), color=marked_color if w == selected_word else unmarked_colors[i % 2]) for i, w in enumerate(words)]
 
-    return ''.join(reversed(wrapped) if direction == 'rtl' else wrapped)
+    return ' '.join(reversed(wrapped) if direction == 'rtl' else wrapped)
 
 def ass_circle(start_layer, x, y, start_time, end_time, fadein_time):
     mid_time = (end_time + start_time) / 2
@@ -435,6 +478,8 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remov
 
     try:
         process = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', instpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
+        print(process.stdout.decode('utf8'))
+        print(process.stderr.decode('utf8'))
         if process.returncode != 0:
             raise RuntimeError(f'ffmpeg failed: {process.stderr}')
     finally:
