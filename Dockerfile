@@ -9,6 +9,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt update && apt install -y software-properties-common
 RUN apt update && apt install -y --no-install-recommends \
     build-essential \
+    ffmpeg \
     openssh-server \
     vim \
     git \
