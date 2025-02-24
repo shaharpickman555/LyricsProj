@@ -21,6 +21,8 @@ detection_model_name = 'large-v3' if has_juice else 'tiny'
 
 Word = namedtuple('Word', ['word', 'start', 'end'])
 
+ffmpeg_path = os.path.join(os.path.dirname(__file__, 'ffmpeg'))
+
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
 DETECT_LANGUAGE_PROGRESS = 0.1
@@ -477,7 +479,7 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remov
     open(asspath, 'w', encoding='utf8').write(assdata)
 
     try:
-        process = subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', instpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
+        process = subprocess.run([ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', instpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
         print(process.stdout.decode('utf8'))
         print(process.stderr.decode('utf8'))
         if process.returncode != 0:
@@ -505,7 +507,7 @@ def remove_vocals_from_video(mp4_input, output_path, progress_cb=None):
     new_mp4_input = f'{mp4_input_name}-original{mp4_input_ext}'
     os.rename(mp4_input, new_mp4_input)
     try:
-        process = subprocess.run(['ffmpeg', '-y', '-i', new_mp4_input, '-i', instpath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', output_path], capture_output=True)
+        process = subprocess.run([ffmpeg_path, '-y', '-i', new_mp4_input, '-i', instpath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', output_path], capture_output=True)
         if process.returncode != 0:
             raise RuntimeError(f'ffmpeg failed: {process.stderr}')
     finally:

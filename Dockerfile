@@ -7,10 +7,8 @@ ENV TZ=Asia/Jerusalem
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt update && apt install -y software-properties-common
-RUN add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
 RUN apt update && apt install -y --no-install-recommends \
     build-essential \
-    ffmpeg \
     openssh-server \
     vim \
     git \
@@ -47,6 +45,7 @@ RUN pip install -U setuptools
 RUN pip install ctranslate2 -U
 RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=demucs
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
+COPY ffmpeg .
 EXPOSE 8000
 EXPOSE 22
 CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; service ssh start; git pull origin main; pip install -U yt-dlp; exec python frontend.py"]
