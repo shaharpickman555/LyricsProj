@@ -21,7 +21,7 @@ detection_model_name = 'large-v3' if has_juice else 'tiny'
 
 Word = namedtuple('Word', ['word', 'start', 'end'])
 
-ffmpeg_path = os.path.join(os.path.dirname(__file__, 'ffmpeg'))
+ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg')
 
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
