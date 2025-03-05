@@ -1,4 +1,4 @@
-import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes, traceback
+import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes, traceback, inspect
 from dataclasses import dataclass
 import unicodedata
 from pathlib import Path
@@ -23,6 +23,11 @@ Word = namedtuple('Word', ['word', 'start', 'end'])
 
 ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg')
 
+local_upload_dir = 'uploads/'
+local_cache_dir = 'songs/'
+max_job_history = 1000
+default_model_type = 'faster'
+
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
 DETECT_LANGUAGE_PROGRESS = 0.1
@@ -43,13 +48,13 @@ REMOVE_VOCALS_SEPARATOR_PROGRESS = 5/7
 whisper_model_frameworks = {
                     'faster':
                     {
-                        None: (model_size_str, 'faster', {}, {}),
+                        None: (model_size_str, 'faster', {}, dict(vad_parameters=dict(threshold=0.6))),
                         'he': ('ivrit-ai/faster-whisper-v2-d4', 'faster', {}, dict(patience=2, beam_size=5)),
                     },
                     'whisperx':
                     {
                         None: (model_size_str, 'whisperx', {}, {}),
-                        'he': ('ivrit-ai/faster-whisper-v2-d4', 'whisperx', dict(patience=2, beam_size=5), {}),
+                        'he': ('ivrit-ai/faster-whisper-v2-d4', 'whisperx', dict(patience=2, beam_size=5, multilingual=False), {}),
                     },
                  }
 
@@ -84,6 +89,17 @@ def detect_audio(audio):
     lang, conf, scores = loaded_detection_model.detect_language(audio, language_detection_segments=1000)
     
     return lang
+    
+class WhisperXProgressHook:
+    def __init__(self, cb):
+        self.cb = cb
+        
+    def __bool__(self):
+        frames = inspect.stack()
+        loc = frames[1].frame.f_locals
+        if 'idx' in loc and 'total_segments' in loc:
+            self.cb((loc['idx'] + 1) / loc['total_segments'])
+        return False
 
 loaded_model_desc = None
 loaded_model = None
@@ -110,7 +126,7 @@ def transcribe_audio(audio, progress_cb=None):
         torch.cuda.empty_cache()
         
         if model_framework == 'faster':
-            loaded_model = WhisperModel(model_name, device=device_str, compute_type=compute_type_str)
+            loaded_model = WhisperModel(model_name, device=device_str, compute_type=compute_type_str, **model_options)
             transcribe_options['word_timestamps'] = True
         elif model_framework == 'whisperx':
             loaded_model = whisperx.load_model(model_name, device=device_str, compute_type=compute_type_str, vad_options={'vad_onset': 0.05, 'vad_offset': 0.05}, asr_options={'multilingual': True, 'hotwords': None, **model_options})
@@ -122,10 +138,17 @@ def transcribe_audio(audio, progress_cb=None):
     if progress_cb:
         progress_cb(DETECT_LANGUAGE_PROGRESS + LOAD_TRANSCRIBE_MODEL_PROGRESS)
     
-    if model_framework == 'whisperx' and isinstance(audio, str):
-        #path
-        audio = whisperx.load_audio(audio)
-    
+    if model_framework == 'whisperx':
+        current_progress = DETECT_LANGUAGE_PROGRESS + LOAD_TRANSCRIBE_MODEL_PROGRESS
+        def hook(p):
+            if progress_cb:
+                progress_cb(current_progress + (p * (1 - current_progress)))
+        transcribe_options['print_progress'] = WhisperXProgressHook(hook)
+        
+        if isinstance(audio, str):
+            #path
+            audio = whisperx.load_audio(audio)
+
     result = loaded_model.transcribe(audio, language=lang, **transcribe_options)
 
     if progress_cb:
@@ -177,9 +200,6 @@ def load_separator():
         return loaded_separator
     loaded_separator = demucs.api.Separator(model='htdemucs')
     return loaded_separator
-
-local_upload_dir = 'uploads/'
-local_cache_dir = 'songs/'
 
 def getitem(l, i, default=None):
     try:
@@ -467,6 +487,7 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remov
     instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
 
     if transcribe_using_vocals:
+        #vocals already have silence accounted for
         silence = 0
         #use vocals only
         audiopath = vocalspath
@@ -480,8 +501,6 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remov
 
     try:
         process = subprocess.run([ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', instpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
-        print(process.stdout.decode('utf8'))
-        print(process.stderr.decode('utf8'))
         if process.returncode != 0:
             raise RuntimeError(f'ffmpeg failed: {process.stderr}')
     finally:
@@ -624,8 +643,6 @@ worker_thread = None
 should_stop = False
 job_queue = None
 job_status_cb = None
-max_job_history = 1000
-default_model_type = 'faster'
 
 def work_loop():
     global should_stop, job_queue, lock, event, job_status_cb
