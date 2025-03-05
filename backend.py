@@ -26,7 +26,7 @@ ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg')
 local_upload_dir = 'uploads/'
 local_cache_dir = 'songs/'
 max_job_history = 1000
-default_model_type = 'faster'
+default_model_type = 'whisperx'
 
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
