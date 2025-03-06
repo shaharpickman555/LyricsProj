@@ -458,7 +458,7 @@ def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_si
     if progress_cb:
         progress_cb(1.0)
 
-def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None):
+def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=False, remove_intermediates=True, progress_cb=None):
     global whisper_model_framework
     
     if progress_cb:
@@ -507,7 +507,8 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remov
         if remove_intermediates:
             os.remove(asspath)
             os.remove(instpath)
-            os.remove(vocalspath)
+            if vocalspath:
+                os.remove(vocalspath)
     
     if progress_cb:
         progress_cb(1.0)
