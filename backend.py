@@ -627,7 +627,7 @@ class Job:
             object.__setattr__(self, 'title', title)
             
     def __eq__(self, other):
-        return self.tid == other.tid
+        return self.tid == getattr(other, 'tid', None)
         
     def update_status_locked(self, status, out_path=None):
         object.__setattr__(self, 'status', status)
