@@ -22,6 +22,9 @@ detection_model_name = 'large-v3' if has_juice else 'tiny'
 Word = namedtuple('Word', ['word', 'start', 'end'])
 
 ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg')
+if not os.path.exists(ffmpeg_path):
+    print('Falling back to system ffmpeg')
+    ffmpeg_path = shutil.which('ffmpeg')
 
 local_upload_dir = 'uploads/'
 local_cache_dir = 'songs/'
