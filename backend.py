@@ -52,12 +52,12 @@ heb_model_name = 'ivrit-ai/whisper-large-v3-ct2' if has_juice else 'tiny'
 whisper_model_frameworks = {
                     'faster':
                     {
-                        None: (model_size_str, 'faster', {}, dict(vad_parameters=dict(threshold=0.6))),
+                        None: (default_model_name, 'faster', {}, dict(vad_parameters=dict(threshold=0.6))),
                         'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5)),
                     },
                     'whisperx':
                     {
-                        None: (model_size_str, 'whisperx', {}, {}),
+                        None: (default_model_name, 'whisperx', {}, {}),
                         'he': (heb_model_name, 'whisperx', dict(patience=2, beam_size=5, multilingual=False), {}),
                     },
                  }
