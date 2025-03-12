@@ -10,11 +10,12 @@ from collections import namedtuple
 import torch
 import gc
 
+import whisperx
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 has_juice = torch.cuda.device_count() > 0
 device_str = 'cuda' if has_juice else 'cpu'
-model_size_str = 'large-v3' if has_juice else 'tiny'
 compute_type_str = 'int8' if has_juice else 'int8'
 
 detection_model_name = 'large-v3' if has_juice else 'tiny'
@@ -40,24 +41,24 @@ LOAD_SEPARATOR_MODEL_PROGRESS = 0.1
 SEPARATOR_MODEL_PROGRESS = 0.75 #10% load, 75% process, 15% save
 
 LYRICS_VIDEO_SEPARATOR_PROGRESS = 0.5
-LYRICS_VIDEO_TRANSCRIBE_PROGRESS_FASTER = 0.05
-LYRICS_VIDEO_ALIGN_PROGRESS_FASTER = 0.3  #50% separator, 5% transcribe, 30% align (actually transcribing), 15% ffmpeg
-
-LYRICS_VIDEO_TRANSCRIBE_PROGRESS_WHISPERX = 0.3
-LYRICS_VIDEO_ALIGN_PROGRESS_WHISPERX = 0.05  #50% separator, 30% transcribe, 5% align, 15% ffmpeg
+LYRICS_VIDEO_TRANSCRIBE_PROGRESS = 0.3
+LYRICS_VIDEO_ALIGN_PROGRESS = 0.05  #50% separator, 30% transcribe, 5% align, 15% ffmpeg
 
 REMOVE_VOCALS_SEPARATOR_PROGRESS = 5/7
+
+default_model_name = 'large-v3' if has_juice else 'tiny'
+heb_model_name = 'ivrit-ai/whisper-large-v3-ct2' if has_juice else 'tiny'
 
 whisper_model_frameworks = {
                     'faster':
                     {
                         None: (model_size_str, 'faster', {}, dict(vad_parameters=dict(threshold=0.6))),
-                        'he': ('ivrit-ai/faster-whisper-v2-d4', 'faster', {}, dict(patience=2, beam_size=5)),
+                        'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5)),
                     },
                     'whisperx':
                     {
                         None: (model_size_str, 'whisperx', {}, {}),
-                        'he': ('ivrit-ai/faster-whisper-v2-d4', 'whisperx', dict(patience=2, beam_size=5, multilingual=False), {}),
+                        'he': (heb_model_name, 'whisperx', dict(patience=2, beam_size=5, multilingual=False), {}),
                     },
                  }
 
@@ -138,14 +139,16 @@ def transcribe_audio(audio, progress_cb=None):
         loaded_model_desc = model_desc
         print(f'loaded model {model_framework} {model_name} to {device_str}')
     
-    if progress_cb:
-        progress_cb(DETECT_LANGUAGE_PROGRESS + LOAD_TRANSCRIBE_MODEL_PROGRESS)
+    current_progress = DETECT_LANGUAGE_PROGRESS + LOAD_TRANSCRIBE_MODEL_PROGRESS
     
+    if progress_cb:
+        progress_cb(current_progress)
+        
+    def hook(p):
+        if progress_cb:
+            progress_cb(current_progress + (p * (1 - current_progress)))
+        
     if model_framework == 'whisperx':
-        current_progress = DETECT_LANGUAGE_PROGRESS + LOAD_TRANSCRIBE_MODEL_PROGRESS
-        def hook(p):
-            if progress_cb:
-                progress_cb(current_progress + (p * (1 - current_progress)))
         transcribe_options['print_progress'] = WhisperXProgressHook(hook)
         
         if isinstance(audio, str):
@@ -153,7 +156,18 @@ def transcribe_audio(audio, progress_cb=None):
             audio = whisperx.load_audio(audio)
 
     result = loaded_model.transcribe(audio, language=lang, **transcribe_options)
-
+    
+    if model_framework == 'faster':
+        #apply generator
+        segment_gen, info = result
+        segments = []
+        
+        for segment in segment_gen:
+            segments.append(segment)
+            hook(segment.end / info.duration_after_vad)
+        
+        result = segments, info
+        
     if progress_cb:
         progress_cb(1.0)
         
@@ -169,28 +183,28 @@ def align_audio(transcribe_result, progress_cb=None):
     
     model_result, audio = transcribe_result
     
-    need_alignment = isinstance(model_result, dict)
-    
-    if need_alignment:
-        #whisperX
-        # no meaningful progress to report
-        
+    if isinstance(model_result, dict):
+        segments = model_result['segments']
         language = model_result['language']
+        need_alignment = True
+    else:
+        segments, info = model_result
+        segments = [dict(words=segment.words, start=segment.start, end=segment.end, text=segment.text) for segment in segments]
+        language = info.language
+        need_alignment = False
+        
+    if need_alignment:
+        # no meaningful progress to report
+
         if loaded_align_model_lang != language:
             loaded_align_model = whisperx.load_align_model(language_code=language, device=device_str)
             loaded_align_model_lang = language
 
-        model_result = whisperx.align(model_result['segments'], *loaded_align_model, audio, return_char_alignments=False, device=device_str)
+        align_result = whisperx.align(segments, *loaded_align_model, audio, return_char_alignments=False, device=device_str)
 
-        segments = [[Word(word=f' {w["word"]}', start=w['start'], end=w['end']) for w in segment.get('words', segment.get('word_segments'))] for segment in model_result['segments']]
+        segments = [[Word(word=f' {w["word"]}', start=w['start'], end=w['end']) for w in segment.get('words', segment.get('word_segments'))] for segment in align_result['segments']]
     else:
-        #faster
-        result, info = model_result
-        segments = []
-        for segment in result:
-            segments.append(segment.words)
-            if progress_cb:
-                progress_cb(segment.end / info.duration_after_vad)
+        segments = [segment['words'] for segment in segments]
     
     if progress_cb:
         progress_cb(1.0)
@@ -467,20 +481,17 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=False, remo
     if progress_cb:
         progress_cb(0.0)
         
-    transcribe_progress, align_progress = dict(faster=(LYRICS_VIDEO_TRANSCRIBE_PROGRESS_FASTER, LYRICS_VIDEO_ALIGN_PROGRESS_FASTER),
-                                               whisperx=(LYRICS_VIDEO_TRANSCRIBE_PROGRESS_WHISPERX, LYRICS_VIDEO_ALIGN_PROGRESS_WHISPERX))[whisper_model_framework]
-        
     def instrumental_progress_cb(progress):
         if progress_cb:
             progress_cb(progress * LYRICS_VIDEO_SEPARATOR_PROGRESS)
             
     def transcribe_progress_cb(progress):
         if progress_cb:
-            progress_cb(LYRICS_VIDEO_SEPARATOR_PROGRESS + (progress * transcribe_progress))
+            progress_cb(LYRICS_VIDEO_SEPARATOR_PROGRESS + (progress * LYRICS_VIDEO_TRANSCRIBE_PROGRESS))
             
     def align_progress_cb(progress):
         if progress_cb:
-            progress_cb(LYRICS_VIDEO_SEPARATOR_PROGRESS + transcribe_progress + (progress * align_progress))
+            progress_cb(LYRICS_VIDEO_SEPARATOR_PROGRESS + LYRICS_VIDEO_TRANSCRIBE_PROGRESS + (progress * LYRICS_VIDEO_ALIGN_PROGRESS))
     
     asspath = replace_ext(audiopath, '.ass')
     instpath = replace_ext(audiopath, '_inst.mp3')
