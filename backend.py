@@ -61,6 +61,10 @@ whisper_model_frameworks = {
                         'he': (heb_model_name, 'whisperx', dict(patience=2, beam_size=5, multilingual=False), {}),
                     },
                  }
+                 
+alignment_model_override = {
+    'he': 'imvladikon/wav2vec2-xls-r-1b-hebrew', #"imvladikon/wav2vec2-xls-r-300m-hebrew", #'imvladikon/wav2vec2-xls-r-300m-lm-hebrew'
+}
 
 whisper_models = None
 whisper_model_framework = None
@@ -197,7 +201,7 @@ def align_audio(transcribe_result, progress_cb=None):
         # no meaningful progress to report
 
         if loaded_align_model_lang != language:
-            loaded_align_model = whisperx.load_align_model(language_code=language, device=device_str)
+            loaded_align_model = whisperx.load_align_model(language_code=language, device=device_str, model_name=alignment_model_override.get(language))
             loaded_align_model_lang = language
 
         align_result = whisperx.align(segments, *loaded_align_model, audio, return_char_alignments=False, device=device_str)
