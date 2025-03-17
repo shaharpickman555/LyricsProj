@@ -30,7 +30,7 @@ if not os.path.exists(ffmpeg_path):
 local_upload_dir = 'uploads/'
 local_cache_dir = 'songs/'
 max_job_history = 1000
-default_model_type = 'whisperx'
+default_model_type = 'faster'
 
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
@@ -63,7 +63,7 @@ whisper_model_frameworks = {
                  }
                  
 alignment_model_override = {
-    'he': 'imvladikon/wav2vec2-xls-r-1b-hebrew', #"imvladikon/wav2vec2-xls-r-300m-hebrew", #'imvladikon/wav2vec2-xls-r-300m-lm-hebrew'
+    #'he': 'imvladikon/wav2vec2-xls-r-1b-hebrew', #"imvladikon/wav2vec2-xls-r-300m-hebrew", #'imvladikon/wav2vec2-xls-r-300m-lm-hebrew'
 }
 
 whisper_models = None
