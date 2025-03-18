@@ -11,6 +11,7 @@ import torch
 import gc
 
 import whisperx
+import faster_whisper
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
@@ -52,13 +53,13 @@ heb_model_name = 'ivrit-ai/whisper-large-v3-ct2' if has_juice else 'tiny'
 whisper_model_frameworks = {
                     'faster':
                     {
-                        None: (default_model_name, 'faster', {}, dict(vad_parameters=dict(threshold=0.6))),
-                        'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5)),
+                        None: (default_model_name, 'faster', {}, dict(vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.5, max_speech_duration_s=2))),
+                        'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5, vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.5, max_speech_duration_s=2))),
                     },
                     'whisperx':
                     {
                         None: (default_model_name, 'whisperx', {}, {}),
-                        'he': (heb_model_name, 'whisperx', dict(patience=2, beam_size=5, multilingual=False), {}),
+                        'he': (heb_model_name, 'whisperx', dict(patience=2, beam_size=5, multilingual=True), {}),
                     },
                  }
                  
@@ -94,7 +95,7 @@ def detect_audio(audio):
     
     audio = decode_audio(audio, sampling_rate=loaded_detection_model.feature_extractor.sampling_rate)
     
-    lang, conf, scores = loaded_detection_model.detect_language(audio, language_detection_segments=1000)
+    lang, conf, scores = loaded_detection_model.detect_language(audio, language_detection_segments=1000, language_detection_threshold=1.0)
     
     return lang
     
@@ -188,14 +189,16 @@ def align_audio(transcribe_result, progress_cb=None):
     model_result, audio = transcribe_result
     
     if isinstance(model_result, dict):
+        #whisperx
         segments = model_result['segments']
         language = model_result['language']
         need_alignment = True
     else:
+        #faster
         segments, info = model_result
         segments = [dict(words=segment.words, start=segment.start, end=segment.end, text=segment.text) for segment in segments]
         language = info.language
-        need_alignment = False
+        need_alignment = False #alignment does not work properly here (missing dictionary)
         
     if need_alignment:
         # no meaningful progress to report
