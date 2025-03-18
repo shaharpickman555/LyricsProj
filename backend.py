@@ -169,7 +169,7 @@ def transcribe_audio(audio, progress_cb=None):
         
         for segment in segment_gen:
             segments.append(segment)
-            hook(segment.end / info.duration_after_vad)
+            hook(segment.end / info.duration)
         
         result = segments, info
         
