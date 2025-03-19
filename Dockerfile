@@ -32,6 +32,7 @@ RUN pip install --no-cache-dir git+https://github.com/m-bain/whisperx.git
 RUN pip install --no-cache-dir -U \
     socketio \
     flask-socketio \
+    werkzeug \
     gunicorn \
     yt-dlp \
     faster-whisper \

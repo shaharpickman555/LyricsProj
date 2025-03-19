@@ -1,12 +1,16 @@
 import subprocess
-from backend import Job, set_queue, init_thread, stop_thread
-import os, sys, argparse
+from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize
+import os, sys, argparse, logging
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response
+from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import traceback
 import platform
 import re
 from typing import List
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 UPLOAD_FOLDER = "uploads"
 SONGS_FOLDER = "songs"
@@ -14,6 +18,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SONGS_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = max_job_filesize
 socketio = SocketIO(app)
 rooms = {}
 
@@ -35,7 +40,7 @@ def update_rooms_list():
 
 @app.route("/")
 def select_room():
-    print("Current rooms:", list(rooms.keys()))
+    logger.info("Current rooms:", list(rooms.keys()))
     return render_template("select_room.html")
 
 @app.route("/api/create_room", methods=["POST"])
@@ -120,18 +125,25 @@ def add_song(room_id):
     youtube_url = request.form.get("youtube_url", "").strip()
     local_file = request.files.get("local_file")
     keep_val = request.form.get("keep", "nothing")
+    
+    job_params = dict(keep=keep_val)
 
     if youtube_url:
-        job = Job(url=youtube_url, keep=keep_val)
-        playlist.append(job)
+        job_params['url'] = youtube_url
     elif local_file and local_file.filename:
-        save_path = os.path.join(UPLOAD_FOLDER, local_file.filename)
+        save_path = os.path.join(UPLOAD_FOLDER, secure_filename(local_file.filename))
         local_file.save(save_path)
-        job = Job(path=save_path, keep=keep_val)
-        playlist.append(job)
+        job_params['path'] = save_path
     else:
         return redirect(url_for("index", room_id=room_id))
-
+    
+    try:
+        job = Job(**job_params)
+    except:
+        #TODO display error
+        return redirect(url_for("index", room_id=room_id))
+        
+    playlist.append(job)
     set_queue(playlist)
     socketio.emit("playlist_updated", serialize_playlist(room_id), to=room_id)
     return redirect(url_for("index", room_id=room_id))
@@ -241,25 +253,23 @@ def job_status_callback(updated_job):
 def cb(job, error):
     job_status_callback(job)
     if error:
-        print(f'{job.tid} error: ', traceback.format_exc(error))
+        logger.info(f'{job.tid} error: ', traceback.format_exc(error))
     elif job.status == 'processing':
-        print(f'progress: {100*job.progress:.2f}%')
+        logger.info(f'progress: {100*job.progress:.2f}%')
     elif job.status == 'done':
-        print(f'{job.tid} is available at {job.out_path} ({job.status})')
+        logger.info(f'{job.tid} is available at {job.out_path} ({job.status})')
 
 def create_app():
     init_thread(cb)
-    print("Done creating App")
+    logger.info("Done creating App")
     return app
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--release", help="release mode", action="store_true")
     args = parser.parse_args()
+    set_debug(not args.release)
     try:
-        if args.release and platform.system() == 'Linux':
-            subprocess.run(['gunicorn', '-b', '0.0.0.0', '-w','1','frontend:create_app()'])
-        else:
-            socketio.run(create_app(), debug=True, host="0.0.0.0", port=8000, allow_unsafe_werkzeug=True, use_reloader=False)
+        socketio.run(create_app(), debug=True, host="0.0.0.0", port=8000, allow_unsafe_werkzeug=True, use_reloader=False)
     finally:
         stop_thread()

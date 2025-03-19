@@ -1,4 +1,4 @@
-import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes, traceback, inspect
+import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes, traceback, inspect, stat, logging
 from dataclasses import dataclass
 import unicodedata
 from pathlib import Path
@@ -13,6 +13,9 @@ import gc
 import whisperx
 import faster_whisper
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 has_juice = torch.cuda.device_count() > 0
@@ -25,13 +28,18 @@ Word = namedtuple('Word', ['word', 'start', 'end'])
 
 ffmpeg_path = os.path.join(os.path.dirname(__file__), 'ffmpeg')
 if not os.path.exists(ffmpeg_path):
-    print('Falling back to system ffmpeg')
+    logger.warning('Falling back to system ffmpeg')
     ffmpeg_path = shutil.which('ffmpeg')
 
 local_upload_dir = 'uploads/'
 local_cache_dir = 'songs/'
 max_job_history = 1000
+max_job_duration = 20 * 60
+max_job_filesize = 100 * 1024 * 1024
 default_model_type = 'faster'
+
+max_local_dir_size = 1024 ** 3
+max_local_dir_num_files = 10
 
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
@@ -66,6 +74,10 @@ whisper_model_frameworks = {
 alignment_model_override = {
     #'he': 'imvladikon/wav2vec2-xls-r-1b-hebrew', #"imvladikon/wav2vec2-xls-r-300m-hebrew", #'imvladikon/wav2vec2-xls-r-300m-lm-hebrew'
 }
+
+def set_debug(debug):
+    if not debug and not has_juice:
+        raise RuntimeError('No GPU on release')
 
 whisper_models = None
 whisper_model_framework = None
@@ -119,7 +131,7 @@ def transcribe_audio(audio, progress_cb=None):
         progress_cb(0.0)
         
     lang = detect_audio(audio)
-    print('detected: ', lang)
+    logger.info('detected: ', lang)
     
     if progress_cb:
         progress_cb(DETECT_LANGUAGE_PROGRESS)
@@ -129,7 +141,7 @@ def transcribe_audio(audio, progress_cb=None):
     model_name, model_framework, model_options, transcribe_options = model_desc
     
     if model_desc != loaded_model_desc:
-        print(f'Replacing loaded model -> {model_desc}')
+        logger.info(f'Replacing loaded model -> {model_desc}')
         loaded_model = None
         gc.collect()
         torch.cuda.empty_cache()
@@ -142,7 +154,7 @@ def transcribe_audio(audio, progress_cb=None):
         else:
             raise ValueError(f'unknown model {model_desc}')
         loaded_model_desc = model_desc
-        print(f'loaded model {model_framework} {model_name} to {device_str}')
+        logger.info(f'loaded model {model_framework} {model_name} to {device_str}')
     
     current_progress = DETECT_LANGUAGE_PROGRESS + LOAD_TRANSCRIBE_MODEL_PROGRESS
     
@@ -240,7 +252,7 @@ def youtube_info(url):
     with yt_dlp.YoutubeDL() as ydl:
         info = ydl.extract_info(url, download=False)
         
-    return info['id'], info['title']
+    return info['id'], info['title'], dict(duration=info['duration'])
 
 def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress_cb=None):
     if progress_cb:
@@ -598,10 +610,41 @@ def canonify_input_file(path=None, content=None):
     elif path != canon:
         shutil.move(path, canon)
     return canon
+
+def dir_size_num_oldest(path):
+    tot = 0
+    num = 0
+    oldest = None
+    oldest_time = None
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            filepath = os.path.join(root, file)
+            st = os.lstat(filepath)
+            if stat.S_ISREG(st.st_mode):
+                tot += st.st_size
+                num += 1
+                
+                if oldest_time is None or st.st_atime < oldest_time:
+                    oldest = filepath
+                    oldest_time = st.st_atime
+    return tot, num, oldest
+    
+def clean_cache():
+    for path in (local_upload_dir, local_cache_dir):
+        while True:
+            size, num, oldest = dir_size_num_oldest(path)
+            if size > max_local_dir_size and num > max_local_dir_num_files:
+                logger.info(f'Removing oldest file {oldest}')
+                os.remove(oldest)
+            else:
+                break
     
 #########################threading#####################
 
 class StopException(Exception):
+    pass
+    
+class CancelJob(Exception):
     pass
     
 @dataclass(frozen=True, eq=False)
@@ -611,6 +654,7 @@ class Job:
     path : str = None
     url : str = None
     data : bytes = None
+    info : dict = None
     keep : str = 'nothing'
     model_type : str = ''
     no_cache : bool = False
@@ -636,13 +680,19 @@ class Job:
             
         if self.title is None:
             if self.url:
-                id, title = youtube_info(self.url)
+                id, title, info = youtube_info(self.url)
             elif self.path:
                 title = os.path.splitext(os.path.basename(self.path))[0]
+                info = {size: os.path.getsize(self.path)}
             elif self.data:
                 title = digest(content=self.data)
+                info = {size: len(self.data)}
+                
+            if getattr(info, 'duration', 0) > max_job_duration or getattr(info, 'size', 0) > max_job_filesize:
+                raise ValueError('Job too big')
             
             object.__setattr__(self, 'title', title)
+            object.__setattr__(self, 'info', info)
             
     def __eq__(self, other):
         return self.tid == getattr(other, 'tid', None)
@@ -665,9 +715,10 @@ worker_thread = None
 should_stop = False
 job_queue = None
 job_status_cb = None
+current_job = None
 
 def work_loop():
-    global should_stop, job_queue, lock, event, job_status_cb
+    global should_stop, job_queue, lock, event, job_status_cb, current_job
     
     def progress_cb(progress):
         with lock:
@@ -683,6 +734,8 @@ def work_loop():
     try:
         while not should_stop:
             job = None
+            current_job = None
+            clean_cache()
             with lock:
                 event.clear()
                 if job_queue:
@@ -697,6 +750,8 @@ def work_loop():
                 continue
                 
             try:
+                current_job = job
+                
                 job_status_cb(job, None)
                 
                 output = None
@@ -719,6 +774,8 @@ def work_loop():
                 
                 #TODO remove canon input file?
                 
+                current_job = None
+                
                 with lock:
                     job.update_status_locked('done', output)
                     
@@ -728,9 +785,11 @@ def work_loop():
                     raise
                     
                 with lock:
-                    job.update_status_locked('error')
+                    job.update_status_locked('canceled' if isinstance(e, CancelJob) else 'error')
 
                 job_status_cb(job, e)
+            finally:
+                current_job = None
     except StopException:
         pass
 
@@ -779,15 +838,20 @@ def set_queue(jobs : list[Job]):
     with lock:
         job_queue = tuple(j for j in jobs)
         event.set()
+        
+def cancel_job(job):
+    with lock:
+        if worker_thread is not None and current_job is not None and current_job == job:
+            raise_exception_in_thread(worker_thread, CancelJob)
 
 def thread_test():
     def cb(job, error):
         if error:
-            print(f'{job.tid} error: ', traceback.format_exc(error))
+            logger.info(f'{job.tid} error: ', traceback.format_exc(error))
         elif job.status == 'processing':
-            print(f'progress: {100*job.progress:.2f}%')
+            logger.info(f'progress: {100*job.progress:.2f}%')
         elif job.status == 'done':
-            print(f'{job.tid} is available at {job.out_path} ({job.status})')
+            logger.info(f'{job.tid} is available at {job.out_path} ({job.status})')
             
     init_thread(cb)
     #job4 = Job(path=r'C:\projects\pick\LyricsProj\songs\allstar.wav')
@@ -800,7 +864,7 @@ def thread_test():
 
     try:
         while True:
-            print(job1.status, job2.status, job3.status)
+            logger.info(job1.status, job2.status, job3.status)
             time.sleep(1)
     finally:
         stop_thread()
@@ -845,7 +909,7 @@ def main(argv):
     input = args.input
     
     def progress_cb(progress):
-        print(f'progress: {100*progress:.2f}%')
+        logger.info(f'progress: {100*progress:.2f}%')
     
     def youtube_progress_cb(progress):
         progress_cb(progress * YOUTUBE_DOWNLOAD_PROGRESS)
