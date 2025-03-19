@@ -131,7 +131,7 @@ def transcribe_audio(audio, progress_cb=None):
         progress_cb(0.0)
         
     lang = detect_audio(audio)
-    logger.info('detected: ', lang)
+    logger.info(f'detected: {lang}')
     
     if progress_cb:
         progress_cb(DETECT_LANGUAGE_PROGRESS)
@@ -847,7 +847,7 @@ def cancel_job(job):
 def thread_test():
     def cb(job, error):
         if error:
-            logger.info(f'{job.tid} error: ', traceback.format_exc(error))
+            logger.info(f'{job.tid} error: {traceback.format_exc(error)}')
         elif job.status == 'processing':
             logger.info(f'progress: {100*job.progress:.2f}%')
         elif job.status == 'done':
@@ -864,7 +864,7 @@ def thread_test():
 
     try:
         while True:
-            logger.info(job1.status, job2.status, job3.status)
+            logger.info(f'{job1.status}, {job2.status}, {job3.status}')
             time.sleep(1)
     finally:
         stop_thread()
