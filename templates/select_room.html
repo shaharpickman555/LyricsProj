@@ -13,6 +13,10 @@
     <h1>Welcome to Karaoke App</h1>
     <p>Create or enter a room (opens playlist in new tab):</p>
 
+    <!-- This form no longer shows up on the '/' route in the new setup.
+         If you want to re-enable it under a different route (like '/select_room'),
+         just create a new @app.route("/select_room") in the Python code
+         and render_template("select_room.html") there. -->
     <form id="createRoomForm" class="row g-3 mb-4">
       <div class="col-auto">
         <input type="text" name="room_id" id="roomInput" class="form-control" placeholder="Room ID">

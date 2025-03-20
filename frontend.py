@@ -1,13 +1,15 @@
 import subprocess
-from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize
 import os, sys, argparse, logging
+import random, string
+import re
+import traceback
+import platform
+from typing import List
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
-import traceback
-import platform
-import re
-from typing import List
+
+from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -38,10 +40,19 @@ def create_room_if_valid(room_id: str):
 def update_rooms_list():
     socketio.emit("rooms_list_updated", list(rooms.keys()))
 
+def generate_room_id(length=6):
+    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+
 @app.route("/")
-def select_room():
-    logger.info("Current rooms:", list(rooms.keys()))
-    return render_template("select_room.html")
+def auto_create_room():
+    """
+    Automatically create a new room with a generated name
+    and redirect to its player page.
+    """
+    room_id = generate_room_id()
+    create_room_if_valid(room_id)
+    logger.info(f"Auto-created room: {room_id}")
+    return redirect(url_for("player", room_id=room_id))
 
 @app.route("/api/create_room", methods=["POST"])
 def api_create_room():
@@ -70,10 +81,10 @@ def api_remove_room():
 @app.route("/<room_id>")
 def index(room_id):
     if not validate_room_id(room_id):
-        return make_response("Not Found", 404)
+        return custom_not_found()
     data = get_room(room_id)
     if data is None:
-        return make_response("Not Found", 404)
+        return custom_not_found()
 
     current = get_current_song(room_id)
     return render_template("index.html", playlist=data["playlist"], current_song=current, room_id=room_id)
@@ -81,10 +92,10 @@ def index(room_id):
 @app.route("/player/<room_id>")
 def player(room_id):
     if not validate_room_id(room_id):
-        return make_response("Not Found", 404)
+        return custom_not_found()
     data = get_room(room_id)
     if data is None:
-        return make_response("Not Found", 404)
+        return custom_not_found()
 
     current = get_current_song(room_id)
     return render_template("player.html", current_song=current, room_id=room_id)
@@ -92,10 +103,10 @@ def player(room_id):
 @app.route("/next_song/<room_id>", methods=["POST"])
 def next_song(room_id):
     if not validate_room_id(room_id):
-        return make_response("Not Found", 404)
+        return custom_not_found()
     data = get_room(room_id)
     if data is None:
-        return make_response("Not Found", 404)
+        return custom_not_found()
 
     playlist = data["playlist"]
     current_song = data["current_song"]
@@ -115,17 +126,17 @@ def next_song(room_id):
 @app.route("/add_song/<room_id>", methods=["POST"])
 def add_song(room_id):
     if not validate_room_id(room_id):
-        return make_response("Not Found", 404)
+        return custom_not_found()
     data = get_room(room_id)
     if data is None:
-        return make_response("Not Found", 404)
+        return custom_not_found()
 
     playlist = data["playlist"]
 
     youtube_url = request.form.get("youtube_url", "").strip()
     local_file = request.files.get("local_file")
     keep_val = request.form.get("keep", "nothing")
-    
+
     job_params = dict(keep=keep_val)
 
     if youtube_url:
@@ -136,13 +147,13 @@ def add_song(room_id):
         job_params['path'] = save_path
     else:
         return redirect(url_for("index", room_id=room_id))
-    
+
     try:
         job = Job(**job_params)
     except:
-        #TODO display error
+        # TODO: handle error
         return redirect(url_for("index", room_id=room_id))
-        
+
     playlist.append(job)
     set_queue(playlist)
     socketio.emit("playlist_updated", serialize_playlist(room_id), to=room_id)
@@ -178,9 +189,9 @@ def on_connect():
 def handle_join_room(data):
     room_id = data.get("room_id")
     if not room_id or not validate_room_id(room_id):
-        return  # invalid
+        return
     if room_id not in rooms:
-        return  # doesn't exist
+        return
     join_room(room_id)
 
     emit("playlist_updated", serialize_playlist(room_id))
@@ -253,11 +264,31 @@ def job_status_callback(updated_job):
 def cb(job, error):
     job_status_callback(job)
     if error:
-        logger.info(f'{job.tid} error: ', traceback.format_exc(error))
+        logger.info(f'{job.tid} error: {traceback.format_exc()}')
     elif job.status == 'processing':
         logger.info(f'progress: {100*job.progress:.2f}%')
     elif job.status == 'done':
         logger.info(f'{job.tid} is available at {job.out_path} ({job.status})')
+
+# -- Custom error response
+def custom_not_found():
+    """
+    Return a 404 with a helpful message pointing back to the main page.
+    """
+    return make_response(
+        """<h1>Page not found</h1>
+           <p>This page doesn't exist or the URL is incorrect.</p>
+           <p>You can <a href="/">go back to the main page</a> to create a new room.</p>""",
+        404,
+    )
+
+@app.errorhandler(404)
+def handle_404(e):
+    """
+    Catch all 404s and show the same helpful message
+    rather than default "Not Found".
+    """
+    return custom_not_found()
 
 def create_app():
     init_thread(cb)
