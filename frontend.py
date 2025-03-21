@@ -8,9 +8,10 @@ from typing import List
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
-
 from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize
-
+import qrcode
+from io import BytesIO
+from flask import send_file
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -180,6 +181,21 @@ def get_current_song(room_id):
             return job
     data["current_song"] = None
     return None
+
+
+@app.route("/qr")
+def qr_code():
+    data = request.args.get("data", "")
+    if not data:
+        return make_response("No data provided", 400)
+
+    # Generate QR code in memory
+    qr_img = qrcode.make(data)
+    buf = BytesIO()
+    qr_img.save(buf, format="PNG")
+    buf.seek(0)
+
+    return send_file(buf, mimetype="image/png")
 
 @socketio.on("connect")
 def on_connect():
