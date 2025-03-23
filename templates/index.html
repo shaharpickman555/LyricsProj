@@ -2,12 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Karaoke Playlist</title>
+  <title>Karaoke Playlist (Exclusive Popover)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+  <!-- jQuery, Socket.IO, Sortable -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+
+  <!-- Bootstrap JS Bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -54,10 +62,9 @@
     .progress-bar.text-dark {
       color: #000 !important;
     }
-
-    /* Previous songs are shown in gray */
+    /* Previous songs in gray text */
     #previousPlaylist li {
-      color: #6c757d; /* text-secondary */
+      color: #6c757d;
     }
   </style>
 </head>
@@ -97,6 +104,7 @@
 
   <div class="playlist-container">
     <h2 class="text-center">Playlist</h2>
+    <!-- Main playlist list -->
     <ul id="playlist" class="list-group"></ul>
 
     <div class="d-flex justify-content-center mt-3">
@@ -106,7 +114,7 @@
 
     <hr class="mt-5">
 
-    <!-- New Previous Songs Section -->
+    <!-- Previous Songs Section -->
     <h3 class="text-center text-secondary">Previous Songs</h3>
     <ul id="previousPlaylist" class="list-group"></ul>
   </div>
@@ -119,14 +127,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   socket.on('connect', () => {
     socket.emit("join_room", { room_id: roomId });
-    console.log("Connected to Socket.IO server, joined room:", roomId);
+    console.log("Connected to Socket.IO, joined room:", roomId);
   });
 
-  // Re-render data whenever the server sends updated room info
+  // Receive updated data from server
   socket.on("playlist_updated", (updatedRoom) => {
     // updatedRoom = { playlist: [...], previous_songs: [...] }
     renderPlaylist(updatedRoom.playlist);
     renderPrevious(updatedRoom.previous_songs);
+
+    // Initialize all popovers (ensuring only one at a time)
+    initPopovers();
   });
 
   function renderPlaylist(playlist) {
@@ -137,6 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const li = document.createElement("li");
       li.dataset.index = index;
       li.className = "list-group-item d-flex justify-content-between align-items-center";
+
       if (job.is_playing) {
         li.classList.add("playing-song");
       }
@@ -148,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="status">${getStatusIcon(job.status)}</span>
       `;
 
-      // If processing, show progress bar
+      // If "processing", show progress
       if (job.status === "processing") {
         const pct = Math.round((job.progress || 0) * 100);
         html += `
@@ -164,10 +176,26 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         `;
       }
-
       html += `</div>`;
 
-      // Only remove if it's not currently playing
+      // If the job has a URL, show a popover with a clickable link
+      if (job.url) {
+        // popover content is HTML with a link
+        const contentHtml = `<a href='${job.url}' target='_blank'>Open URL</a>`;
+        html += `
+          <button type="button"
+                  class="btn btn-sm btn-info popover-btn me-2"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="click"
+                  data-bs-html="true"
+                  data-bs-content="${contentHtml}"
+                  title="Song URL">
+            ?
+          </button>
+        `;
+      }
+
+      // Only remove if not currently playing
       if (!job.is_playing) {
         html += `<button class="remove-btn btn btn-sm" data-index="${index}">❌</button>`;
       }
@@ -186,13 +214,27 @@ document.addEventListener("DOMContentLoaded", () => {
       li.dataset.index = index;
       li.className = "list-group-item d-flex justify-content-between align-items-center";
 
-      // We'll show title in gray; "restore" button on the right
-      let html = `
-        <div class="flex-grow-1 text-start">
-          <span class="title">${job.title}</span>
-        </div>
-        <button class="restore-btn btn btn-sm" data-index="${index}">⤴️ Restore</button>
-      `;
+      // Show the title in gray
+      let html = `<div class="flex-grow-1 text-start">${job.title}</div>`;
+
+      // If there's a URL, show popover
+      if (job.url) {
+        const contentHtml = `<a href='${job.url}' target='_blank'>Open URL</a>`;
+        html += `
+          <button type="button"
+                  class="btn btn-sm btn-info popover-btn me-2"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="click"
+                  data-bs-html="true"
+                  data-bs-content="${contentHtml}"
+                  title="Song URL">
+            ?
+          </button>
+        `;
+      }
+
+      // Restore button
+      html += `<button class="restore-btn btn btn-sm" data-index="${index}">⤴️ Restore</button>`;
 
       li.innerHTML = html;
       prevEl.appendChild(li);
@@ -209,7 +251,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Remove song
+  // Initialize popovers, ensuring only one is open at a time
+  function initPopovers() {
+    // Create an array of popover instances
+    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    const popovers = popoverTriggerList.map(function (el) {
+      return new bootstrap.Popover(el, {
+        html: true,
+        trigger: 'click'
+      });
+    });
+
+    // On "show.bs.popover" of one popover, hide all others
+    popovers.forEach((popover) => {
+      popover._element.addEventListener('show.bs.popover', () => {
+        popovers.forEach((other) => {
+          if (other !== popover) {
+            other.hide();
+          }
+        });
+      });
+    });
+  }
+
+  // Remove song from main playlist
   $(document).on("click", ".remove-btn", function() {
     const index = $(this).data("index");
     socket.emit("remove_song", { room_id: roomId, index: index });
