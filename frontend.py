@@ -36,7 +36,7 @@ def get_room(room_id: str):
 def create_room_if_valid(room_id: str):
     if room_id not in rooms:
         if validate_room_id(room_id):
-            rooms[room_id] = {"playlist": [], "current_song": None}
+            rooms[room_id] = {"playlist": [], "current_song": None, "previous_songs": []}
 
 def update_rooms_list():
     socketio.emit("rooms_list_updated", list(rooms.keys()))
@@ -114,9 +114,10 @@ def next_song(room_id):
     if current_song and current_song in playlist:
         playlist.remove(current_song)
         set_queue(playlist)
+        data["previous_songs"].append(current_song)
 
     data["current_song"] = get_current_song(room_id)
-    socketio.emit("playlist_updated", serialize_playlist(room_id), to=room_id)
+    socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
     new_current = data["current_song"]
     socketio.emit("player_updated", {
         "current_song": new_current.out_path if new_current else None,
@@ -157,7 +158,7 @@ def add_song(room_id):
 
     playlist.append(job)
     set_queue(playlist)
-    socketio.emit("playlist_updated", serialize_playlist(room_id), to=room_id)
+    socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
     return redirect(url_for("index", room_id=room_id))
 
 @app.route("/songs/<path:filename>")
@@ -181,6 +182,36 @@ def get_current_song(room_id):
             return job
     data["current_song"] = None
     return None
+
+@app.route("/restore_song/<room_id>", methods=["POST"])
+def restore_song(room_id):
+    if not validate_room_id(room_id):
+        return custom_not_found()
+    data = get_room(room_id)
+    if data is None:
+        return custom_not_found()
+
+    index_str = request.form.get("index", "")
+    if not index_str.isdigit():
+        return jsonify({"error": "Invalid index"}), 400
+    index = int(index_str)
+
+    previous_songs = data["previous_songs"]
+    if 0 <= index < len(previous_songs):
+        # Pop the song from previous_songs
+        song = previous_songs.pop(index)
+        # Add to the end of the main playlist
+        data["playlist"].append(song)
+        set_queue(data["playlist"])
+        # If there's no current song playing, try to set one
+        if not data["current_song"]:
+            data["current_song"] = get_current_song(room_id)
+    else:
+        return jsonify({"error": "Index out of range"}), 400
+
+    # Notify clients
+    socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
+    return jsonify({"restored": True}), 200
 
 
 @app.route("/qr")
@@ -227,7 +258,7 @@ def handle_join_room(data):
         return
     join_room(room_id)
 
-    emit("playlist_updated", serialize_playlist(room_id))
+    emit("playlist_updated", serialize_room(room_id))
     current = rooms[room_id]["current_song"]
     emit("player_updated", {
         "current_song": current.out_path if current else None,
@@ -249,7 +280,7 @@ def handle_remove_song(data):
         if playlist[i] != get_current_song(room_id):
             del playlist[i]
             set_queue(playlist)
-            socketio.emit("playlist_updated", serialize_playlist(room_id), to=room_id)
+            socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
 
 @socketio.on("reorder_playlist")
 def handle_reorder_playlist(data):
@@ -266,7 +297,7 @@ def handle_reorder_playlist(data):
         if playlist[old_index] != get_current_song(room_id):
             playlist.insert(new_index, playlist.pop(old_index))
             set_queue(playlist)
-            socketio.emit("playlist_updated", serialize_playlist(room_id), to=room_id)
+            socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
 
 def serialize_playlist(room_id):
     rdata = rooms[room_id]
@@ -281,11 +312,40 @@ def serialize_playlist(room_id):
             "out_path": getattr(j, "out_path", "")
         })
     return result
+def serialize_room(room_id):
+    rdata = rooms[room_id]
+    current = rdata["current_song"]
+
+    # Main playlist
+    playlist_data = []
+    for j in rdata["playlist"]:
+        playlist_data.append({
+            "title": j.title,
+            "status": j.status,
+            "progress": j.progress,
+            "is_playing": (current is not None and j.tid == current.tid),
+            "out_path": getattr(j, "out_path", "")
+        })
+
+    # Previous songs
+    previous_data = []
+    for j in rdata["previous_songs"]:
+        previous_data.append({
+            "title": j.title,
+            "status": j.status,      # Typically 'done'
+            "progress": j.progress,  # Typically 1.0 or none
+            "out_path": getattr(j, "out_path", "")
+        })
+
+    return {
+        "playlist": playlist_data,
+        "previous_songs": previous_data
+    }
 
 def job_status_callback(updated_job):
     for rid, rdata in rooms.items():
         if updated_job in rdata["playlist"]:
-            socketio.emit("playlist_updated", serialize_playlist(rid), to=rid)
+            socketio.emit("playlist_updated", serialize_room(rid), to=rid)
             if not rdata["current_song"]:
                 csong = get_current_song(rid)
                 socketio.emit("player_updated", {
