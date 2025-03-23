@@ -188,13 +188,30 @@ def qr_code():
     data = request.args.get("data", "")
     if not data:
         return make_response("No data provided", 400)
-
-    # Generate QR code in memory
     qr_img = qrcode.make(data)
     buf = BytesIO()
     qr_img.save(buf, format="PNG")
     buf.seek(0)
+    return send_file(buf, mimetype="image/png")
 
+
+@app.route("/qr_inv")
+def qr_inv():
+    data = request.args.get("data", "")
+    if not data:
+        return make_response("No data provided", 400)
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=8,  # You can adjust for bigger/smaller squares
+        border=2  # Minimal border
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="white", back_color="black")
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
     return send_file(buf, mimetype="image/png")
 
 @socketio.on("connect")
