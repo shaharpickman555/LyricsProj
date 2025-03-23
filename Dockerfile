@@ -40,7 +40,8 @@ RUN pip install --no-cache-dir -U \
     einops \
     julius \
     lameenc \
-    openunmix
+    openunmix \
+    qrcode
 RUN pip install --no-deps torchaudio
 RUN rm -f /opt/conda/lib/python3.11/site-packages/distutils-precedence.pth
 RUN pip install -U setuptools
