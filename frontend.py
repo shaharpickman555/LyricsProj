@@ -9,6 +9,8 @@ from flask import Flask, render_template, request, redirect, url_for, send_from_
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize
+import time
+time.sleep(600)
 import qrcode
 from io import BytesIO
 from flask import send_file
