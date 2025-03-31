@@ -141,6 +141,15 @@ def add_song(room_id):
 
     job_params = dict(keep=keep_val)
 
+    # 1) no_cache
+    if request.form.get("no_cache"):
+        job_params["no_cache"] = True
+
+    # 2) lang_hint
+    lang_hint = request.form.get("lang_hint", "None")
+    if lang_hint and lang_hint != "None":
+        job_params["lang_hint"] = lang_hint
+
     if youtube_url:
         job_params['url'] = youtube_url
     elif local_file and local_file.filename:
@@ -151,10 +160,18 @@ def add_song(room_id):
         return redirect(url_for("index", room_id=room_id))
 
     try:
+        # If your Job class doesn't have "no_cache" or "lang_hint",
+        # it will simply ignore extra kwargs or raise an error.
+        # If it raises an error, we handle it in except.
         job = Job(**job_params)
     except:
         # TODO: handle error
         return redirect(url_for("index", room_id=room_id))
+
+    playlist.append(job)
+    set_queue(playlist)
+    socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
+    return redirect(url_for("index", room_id=room_id))
 
     playlist.append(job)
     set_queue(playlist)
@@ -387,6 +404,7 @@ def handle_404(e):
 
 def create_app():
     init_thread(cb)
+    create_room_if_valid("temproom")
     logger.info("Done creating App")
     return app
 
