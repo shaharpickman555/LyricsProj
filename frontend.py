@@ -343,6 +343,7 @@ def serialize_room(room_id):
             "is_playing": (current is not None and j.tid == current.tid),
             "out_path": getattr(j, "out_path", ""),
             "url": getattr(j, "url", ""),
+            "info": getattr(j, "info", {}),
         })
 
     # Previous songs
@@ -354,6 +355,7 @@ def serialize_room(room_id):
             "progress": j.progress,  # Typically 1.0 or none
             "out_path": getattr(j, "out_path", ""),
             "url": getattr(j, "url", ""),
+            "info": getattr(j, "info", {}),
         })
 
     return {

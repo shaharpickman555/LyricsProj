@@ -64,13 +64,22 @@
     #previousPlaylist li {
       color: #6c757d;
     }
-    /* Collapsible Advanced section */
+
+    /* Advanced section is hidden by default. We'll toggle it via JS. */
     #advancedSection {
-      display: none; /* hidden by default */
       margin-top: 1rem;
       padding: 1rem;
       background-color: #f2f2f2;
       border-radius: 4px;
+      display: none;
+    }
+
+    /* Make sure long URLs wrap properly in the modal */
+    .modal-body a {
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+      display: inline-block;
+      max-width: 100%;
     }
   </style>
 </head>
@@ -105,9 +114,11 @@
     </div>
 
     <!-- Advanced Toggle Button -->
-    <button type="button" id="toggleAdvancedBtn" class="btn btn-link mt-3">Advanced ▼</button>
+    <button type="button" id="toggleAdvancedBtn" class="btn btn-outline-secondary mt-3">
+      Advanced ▼
+    </button>
 
-    <!-- Advanced Section (initially hidden) -->
+    <!-- Advanced Section -->
     <div id="advancedSection">
       <div class="form-check mb-3">
         <input class="form-check-input" type="checkbox" id="no_cache" name="no_cache" value="1">
@@ -138,7 +149,7 @@
 
   <hr>
 
-  <!-- The rest of your playlist and previous songs UI stays the same -->
+  <!-- Playlist UI -->
   <div class="playlist-container">
     <h2 class="text-center">Playlist</h2>
     <ul id="playlist" class="list-group"></ul>
@@ -150,8 +161,36 @@
 
     <hr class="mt-5">
 
+    <!-- Previous Songs -->
     <h3 class="text-center text-secondary">Previous Songs</h3>
     <ul id="previousPlaylist" class="list-group"></ul>
+  </div>
+</div>
+
+<!-- Single Bootstrap Modal for "Song Info" -->
+<div class="modal fade" id="songInfoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <!-- Main heading: "Song Info" -->
+        <h5 class="modal-title">Song Info</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Additional sub-heading for the Job Title -->
+        <h6 id="songTitleHeading" class="mb-3 text-primary"></h6>
+
+        <p><strong>Song URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
+        <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -160,9 +199,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const socket = io();
   const roomId = "{{ room_id }}";
 
-  // Show/hide the advanced section
+  //--- ADVANCED SECTION TOGGLING ---
   const advancedSection = document.getElementById("advancedSection");
   const toggleBtn = document.getElementById("toggleAdvancedBtn");
+  advancedSection.style.display = "none"; // ensure hidden on load
+
   toggleBtn.addEventListener("click", () => {
     if (advancedSection.style.display === "none") {
       advancedSection.style.display = "block";
@@ -172,19 +213,19 @@ document.addEventListener("DOMContentLoaded", () => {
       toggleBtn.textContent = "Advanced ▼";
     }
   });
+  //--- END ADVANCED TOGGLE ---
 
   socket.on('connect', () => {
     socket.emit("join_room", { room_id: roomId });
-    console.log("Connected to Socket.IO server, joined room:", roomId);
+    console.log("Connected to Socket.IO, joined room:", roomId);
   });
 
   socket.on("playlist_updated", (updatedRoom) => {
-    // updatedRoom = { playlist: [...], previous_songs: [...] }
     renderPlaylist(updatedRoom.playlist);
     renderPrevious(updatedRoom.previous_songs);
-    initPopovers(); // re-init if you're using popovers, etc.
   });
 
+  // Renders the main playlist
   function renderPlaylist(playlist) {
     const playlistEl = document.getElementById("playlist");
     playlistEl.innerHTML = "";
@@ -205,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="status">${getStatusIcon(job.status)}</span>
       `;
 
-      // If "processing", show progress
+      // If job is processing, show progress
       if (job.status === "processing") {
         const pct = Math.round((job.progress || 0) * 100);
         html += `
@@ -223,24 +264,27 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       html += `</div>`;
 
-      // If the job has a URL, show a popover with a clickable link
-      if (job.url) {
-        // popover content is HTML with a link
-        const contentHtml = `<a href='${job.url}' target='_blank'>Open URL</a>`;
+      // If there's info, add "?" button
+      const hasUrl = job.url && job.url.trim() !== "";
+      const hasDuration = job.info && job.info.duration;
+      if (hasUrl || hasDuration) {
+        let urlVal = hasUrl ? job.url : "";
+        let durationVal = hasDuration ? job.info.duration : "N/A";
+
+        // We'll store the job.title too, so we can show it in the modal
+        const safeTitle = job.title.replace(/"/g, '&quot;'); // basic escape for double quotes
         html += `
           <button type="button"
-                  class="btn btn-sm btn-info popover-btn me-2"
-                  data-bs-toggle="popover"
-                  data-bs-trigger="click"
-                  data-bs-html="true"
-                  data-bs-content="${contentHtml}"
-                  title="Song URL">
+                  class="btn btn-sm btn-info me-2 info-btn"
+                  data-title="${safeTitle}"
+                  data-url="${urlVal}"
+                  data-duration="${durationVal}">
             ?
           </button>
         `;
       }
 
-      // Only remove if not currently playing
+      // Remove button (only if not playing)
       if (!job.is_playing) {
         html += `<button class="remove-btn btn btn-sm" data-index="${index}">❌</button>`;
       }
@@ -250,6 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Renders previous songs
   function renderPrevious(previous) {
     const prevEl = document.getElementById("previousPlaylist");
     prevEl.innerHTML = "";
@@ -259,26 +304,27 @@ document.addEventListener("DOMContentLoaded", () => {
       li.dataset.index = index;
       li.className = "list-group-item d-flex justify-content-between align-items-center";
 
-      // Show the title in gray
       let html = `<div class="flex-grow-1 text-start">${job.title}</div>`;
 
-      // If there's a URL, show popover
-      if (job.url) {
-        const contentHtml = `<a href='${job.url}' target='_blank'>Open URL</a>`;
+      const hasUrl = job.url && job.url.trim() !== "";
+      const hasDuration = job.info && job.info.duration;
+
+      if (hasUrl || hasDuration) {
+        let urlVal = hasUrl ? job.url : "";
+        let durationVal = hasDuration ? job.info.duration : "N/A";
+
+        const safeTitle = job.title.replace(/"/g, '&quot;');
         html += `
           <button type="button"
-                  class="btn btn-sm btn-info popover-btn me-2"
-                  data-bs-toggle="popover"
-                  data-bs-trigger="click"
-                  data-bs-html="true"
-                  data-bs-content="${contentHtml}"
-                  title="Song URL">
+                  class="btn btn-sm btn-info me-2 info-btn"
+                  data-title="${safeTitle}"
+                  data-url="${urlVal}"
+                  data-duration="${durationVal}">
             ?
           </button>
         `;
       }
 
-      // Restore button
       html += `<button class="restore-btn btn btn-sm" data-index="${index}">⤴️ Restore</button>`;
 
       li.innerHTML = html;
@@ -286,49 +332,59 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function getStatusIcon(status) {
-    switch (status) {
-      case "idle":       return "⌛";
-      case "processing": return "🔄";
-      case "done":       return "✅";
-      case "error":      return "❌";
-      default:           return status;
+  // Single modal for Song Info
+  const songInfoModal = new bootstrap.Modal(document.getElementById("songInfoModal"));
+  const songTitleHeading = document.getElementById("songTitleHeading");
+  const songUrlLink = document.getElementById("songUrlLink");
+  const songDurationText = document.getElementById("songDurationText");
+
+  // Listen for "?" clicks to open the modal
+  document.addEventListener("click", (event) => {
+    if (event.target.classList.contains("info-btn")) {
+      const rawTitle = event.target.getAttribute("data-title") || "";
+      const rawUrl = event.target.getAttribute("data-url") || "";
+      const rawDuration = event.target.getAttribute("data-duration") || "N/A";
+
+      // Song Title
+      songTitleHeading.textContent = rawTitle;
+
+      // 1) URL field
+      if (rawUrl) {
+        songUrlLink.textContent = rawUrl;
+        songUrlLink.href = rawUrl;
+      } else {
+        songUrlLink.textContent = "None";
+        songUrlLink.removeAttribute("href");
+      }
+
+      // 2) Duration (seconds -> MM:SS)
+      let finalDuration = "N/A";
+      if (rawDuration !== "N/A") {
+        const secs = parseFloat(rawDuration) || 0; // handle parse error
+        const totalSeconds = Math.floor(secs);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const mm = String(minutes).padStart(2, '0');
+        const ss = String(seconds).padStart(2, '0');
+        finalDuration = mm + ":" + ss;
+      }
+      songDurationText.textContent = finalDuration;
+
+      // show the modal
+      songInfoModal.show();
     }
-  }
+  });
 
-  // Initialize popovers, ensuring only one is open at a time
-  function initPopovers() {
-    // Create an array of popover instances
-    const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-    const popovers = popoverTriggerList.map(function (el) {
-      return new bootstrap.Popover(el, {
-        html: true,
-        trigger: 'click'
-      });
-    });
-
-    // On "show.bs.popover" of one popover, hide all others
-    popovers.forEach((popover) => {
-      popover._element.addEventListener('show.bs.popover', () => {
-        popovers.forEach((other) => {
-          if (other !== popover) {
-            other.hide();
-          }
-        });
-      });
-    });
-  }
-
-  // Remove song from main playlist
+  // Remove from main playlist
   $(document).on("click", ".remove-btn", function() {
     const index = $(this).data("index");
     socket.emit("remove_song", { room_id: roomId, index: index });
   });
 
   // Next Song
-  document.getElementById("nextSongBtn").addEventListener("click", function() {
+  document.getElementById("nextSongBtn").addEventListener("click", () => {
     fetch(`/next_song/${roomId}`, { method: "POST" })
-      .then(response => console.log("Next song request sent for room:", roomId))
+      .then(() => console.log("Next song request sent for room:", roomId))
       .catch(error => console.error("Error requesting next song:", error));
   });
 
@@ -351,7 +407,7 @@ document.addEventListener("DOMContentLoaded", () => {
     .catch(err => console.error("Error restoring song:", err));
   });
 
-  // Sortable for main playlist
+  // Sortable main playlist
   new Sortable(document.getElementById("playlist"), {
     handle: ".drag-handle",
     animation: 150,
@@ -370,6 +426,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+// Helper: get icon for job.status
+function getStatusIcon(status) {
+  switch (status) {
+    case "idle":       return "⌛";
+    case "processing": return "🔄";
+    case "done":       return "✅";
+    case "error":      return "❌";
+    default:           return status;
+  }
+}
 </script>
 
 </body>
