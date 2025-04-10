@@ -164,6 +164,9 @@ def add_song(room_id):
         # it will simply ignore extra kwargs or raise an error.
         # If it raises an error, we handle it in except.
         job = Job(**job_params)
+        uploader_name = request.form.get("uploader") or "Unknown"
+        if uploader_name:
+            job.info["uploader"] = uploader_name
     except:
         # TODO: handle error
         return redirect(url_for("index", room_id=room_id))

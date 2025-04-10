@@ -86,10 +86,21 @@
 <body>
 
 <div class="container">
-  <h1 class="text-center">Karaoke Playlist - Room: {{ room_id }}</h1>
+  <!-- We'll dynamically set this heading text to "Karaoke Playlist - Room: XXX (Nick: ???)" -->
+  <h1 id="pageTitle" class="text-center" style="margin:13px; line-height:1.1; font-size:52px;"></h1>
+
+  <!-- Nickname input at the top -->
+  <div class="d-flex justify-content-center align-items-center mb-4" style="gap: 1rem;">
+    <label for="nicknameInput" class="fw-bold">Your Nickname:</label>
+    <input type="text" id="nicknameInput" class="form-control" style="max-width: 200px;" placeholder="Enter nickname...">
+    <button type="button" id="saveNameBtn" class="btn btn-primary">Save Name</button>
+  </div>
 
   <!-- Add Song Form -->
-  <form action="{{ url_for('add_song', room_id=room_id) }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow">
+  <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow">
+    <!-- Hidden field for uploader name -->
+    <input type="hidden" name="uploader" id="uploaderField" value="">
+
     <div class="row g-3">
       <div class="col-md-6">
         <label for="youtube_url">YouTube URL</label>
@@ -184,6 +195,9 @@
 
         <p><strong>Song URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
         <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
+
+        <!-- Now we show the "Uploader" line too -->
+        <p><strong>Uploader:</strong> <span id="uploaderText"></span></p>
       </div>
 
       <div class="modal-footer">
@@ -198,6 +212,48 @@
 document.addEventListener("DOMContentLoaded", () => {
   const socket = io();
   const roomId = "{{ room_id }}";
+
+  // Nickname logic
+  const pageTitle = document.getElementById("pageTitle");
+  const nicknameInput = document.getElementById("nicknameInput");
+  const saveNameBtn = document.getElementById("saveNameBtn");
+  const uploaderField = document.getElementById("uploaderField");
+
+  // 1) Load nickname from localStorage if exists
+  let storedName = localStorage.getItem("karaokeNickname");
+  if (!storedName || storedName.trim() === "") {
+    // generate a "cool" random name
+    storedName = generateCoolNickname();
+  }
+  nicknameInput.value = storedName;
+
+  // 2) Display it in the page heading
+  updatePageTitle(storedName);
+
+  // 3) Each time we click "Save Name," we update localStorage & page
+  saveNameBtn.addEventListener("click", () => {
+    const newName = nicknameInput.value.trim();
+    if (!newName) {
+      // generate if empty
+      const generated = generateCoolNickname();
+      nicknameInput.value = generated;
+      localStorage.setItem("karaokeNickname", generated);
+      updatePageTitle(generated);
+    } else {
+      localStorage.setItem("karaokeNickname", newName);
+      updatePageTitle(newName);
+    }
+  });
+
+  // 4) On "Add Song" form submit, we put the current nickname into the hidden "uploader" field
+  const addSongForm = document.getElementById("addSongForm");
+  addSongForm.addEventListener("submit", () => {
+    const currName = nicknameInput.value.trim() || generateCoolNickname();
+    uploaderField.value = currName;
+    localStorage.setItem("karaokeNickname", currName);
+    updatePageTitle(currName);
+  });
+
 
   //--- ADVANCED SECTION TOGGLING ---
   const advancedSection = document.getElementById("advancedSection");
@@ -267,18 +323,21 @@ document.addEventListener("DOMContentLoaded", () => {
       // If there's info, add "?" button
       const hasUrl = job.url && job.url.trim() !== "";
       const hasDuration = job.info && job.info.duration;
-      if (hasUrl || hasDuration) {
+      const hasUploader = job.info && job.info.uploader;
+
+      if (hasUrl || hasDuration || hasUploader) {
         let urlVal = hasUrl ? job.url : "";
         let durationVal = hasDuration ? job.info.duration : "N/A";
+        let uploaderVal = hasUploader ? job.info.uploader : "Unknown";
 
-        // We'll store the job.title too, so we can show it in the modal
-        const safeTitle = job.title.replace(/"/g, '&quot;'); // basic escape for double quotes
+        const safeTitle = job.title.replace(/"/g, '&quot;');
         html += `
           <button type="button"
                   class="btn btn-sm btn-info me-2 info-btn"
                   data-title="${safeTitle}"
                   data-url="${urlVal}"
-                  data-duration="${durationVal}">
+                  data-duration="${durationVal}"
+                  data-uploader="${uploaderVal}">
             ?
           </button>
         `;
@@ -308,10 +367,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const hasUrl = job.url && job.url.trim() !== "";
       const hasDuration = job.info && job.info.duration;
+      const hasUploader = job.info && job.info.uploader;
 
-      if (hasUrl || hasDuration) {
+      if (hasUrl || hasDuration || hasUploader) {
         let urlVal = hasUrl ? job.url : "";
         let durationVal = hasDuration ? job.info.duration : "N/A";
+        let uploaderVal = hasUploader ? job.info.uploader : "Unknown";
 
         const safeTitle = job.title.replace(/"/g, '&quot;');
         html += `
@@ -319,7 +380,8 @@ document.addEventListener("DOMContentLoaded", () => {
                   class="btn btn-sm btn-info me-2 info-btn"
                   data-title="${safeTitle}"
                   data-url="${urlVal}"
-                  data-duration="${durationVal}">
+                  data-duration="${durationVal}"
+                  data-uploader="${uploaderVal}">
             ?
           </button>
         `;
@@ -337,6 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const songTitleHeading = document.getElementById("songTitleHeading");
   const songUrlLink = document.getElementById("songUrlLink");
   const songDurationText = document.getElementById("songDurationText");
+  const uploaderText = document.getElementById("uploaderText");
 
   // Listen for "?" clicks to open the modal
   document.addEventListener("click", (event) => {
@@ -344,11 +407,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const rawTitle = event.target.getAttribute("data-title") || "";
       const rawUrl = event.target.getAttribute("data-url") || "";
       const rawDuration = event.target.getAttribute("data-duration") || "N/A";
+      const rawUploader = event.target.getAttribute("data-uploader") || "Unknown";
 
       // Song Title
       songTitleHeading.textContent = rawTitle;
 
-      // 1) URL field
+      // URL
       if (rawUrl) {
         songUrlLink.textContent = rawUrl;
         songUrlLink.href = rawUrl;
@@ -357,7 +421,7 @@ document.addEventListener("DOMContentLoaded", () => {
         songUrlLink.removeAttribute("href");
       }
 
-      // 2) Duration (seconds -> MM:SS)
+      // Duration
       let finalDuration = "N/A";
       if (rawDuration !== "N/A") {
         const secs = parseFloat(rawDuration) || 0; // handle parse error
@@ -369,6 +433,9 @@ document.addEventListener("DOMContentLoaded", () => {
         finalDuration = mm + ":" + ss;
       }
       songDurationText.textContent = finalDuration;
+
+      // Uploader
+      uploaderText.textContent = rawUploader;
 
       // show the modal
       songInfoModal.show();
@@ -425,6 +492,24 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
   });
+
+  // Helpers
+  function generateCoolNickname() {
+    // e.g. "FunkyLlama42"
+    const adjectives = ["Funky", "Silly", "Lucky", "Fierce", "Chill", "Magic", "Cool", "Shiny", "Cosmic", "Happy"];
+    const animals = ["Llama", "Badger", "Koala", "Tiger", "Panda", "Unicorn", "Dolphin", "Moose", "Chicken"];
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const ani = animals[Math.floor(Math.random() * animals.length)];
+    const num = Math.floor(Math.random() * 100);
+    return adj + ani + num;
+  }
+
+  function updatePageTitle(name) {
+    pageTitle.innerHTML = `
+      Karaoke Playlist<br>
+      <span style="font-size:32px;">Room: ${roomId}</span>
+    `;
+  }
 });
 
 // Helper: get icon for job.status
