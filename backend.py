@@ -506,7 +506,7 @@ def extract_audio(input, output_audio):
     try:
         process = subprocess.run([ffmpeg_path, '-y', '-i', input, '-vn', output_audio], capture_output=True)
         if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
+            raise RuntimeError(f'ffmpeg failed: {process.args}{chr(10)*2}{process.stderr.decode('utf8', errors='ignore')}')
     finally:
         pass
         
@@ -563,7 +563,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
  
         process = subprocess.run([ffmpeg_path, '-y', *(['-f', 'lavfi', '-i', 'color=c=black:s=1280x720'] if blank_video else ['-i', inputpath]), '-i', instpath, *([] if blank_video else ['-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0']), '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
         if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
+            raise RuntimeError(f'ffmpeg failed: {process.args}{chr(10)*2}{process.stderr.decode('utf8', errors='ignore')}')
             
     finally:
         if remove_intermediates:
@@ -593,7 +593,7 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
     
         process = subprocess.run([ffmpeg_path, '-y', '-i', mp4_input, '-i', instpath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-vcodec', 'h264', output_path], capture_output=True)
         if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
+            raise RuntimeError(f'ffmpeg failed: {process.args}{chr(10)*2}{process.stderr.decode('utf8', errors='ignore')}')
     finally:
         if remove_intermediates:
             try_remove(instpath)
@@ -608,7 +608,7 @@ def passthrough(input, output, progress_cb=None, **_):
         
     process = subprocess.run([ffmpeg_path, '-y', '-i', input, '-c:v', 'copy', '-vcodec', 'h264', output], capture_output=True)
     if process.returncode != 0:
-        raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
+        raise RuntimeError(f'ffmpeg failed: {process.args}{chr(10)*2}{process.stderr.decode('utf8', errors='ignore')}')
     
     if progress_cb:
         progress_cb(1.0)
