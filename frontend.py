@@ -27,6 +27,8 @@ rooms = {}
 
 VALID_ROOM_REGEX = re.compile(r'^[A-Za-z0-9_-]+$')
 
+ALLOWED_LANGUAGE_HINTS = {'ar': 'Arabic', 'en': 'English', 'fr': 'French', 'de': 'German', 'he': 'Hebrew', 'it': 'Italian', 'pt': 'Portuguese', 'ru': 'Russian', 'es': 'Spanish'}
+
 def validate_room_id(room_id: str) -> bool:
     return bool(VALID_ROOM_REGEX.match(room_id))
 
@@ -88,7 +90,7 @@ def index(room_id):
         return custom_not_found()
 
     current = get_current_song(room_id)
-    return render_template("index.html", playlist=data["playlist"], current_song=current, room_id=room_id)
+    return render_template("index.html", playlist=data["playlist"], current_song=current, room_id=room_id, languages=ALLOWED_LANGUAGE_HINTS)
 
 @app.route("/player/<room_id>")
 def player(room_id):
@@ -144,10 +146,14 @@ def add_song(room_id):
     # 1) no_cache
     if request.form.get("no_cache"):
         job_params["no_cache"] = True
+    
+    # 2) blank video
+    if request.form.get("dont_overlay_video"):
+        job_params["blank_video"] = True
 
     # 2) lang_hint
     lang_hint = request.form.get("lang_hint", "None")
-    if lang_hint and lang_hint != "None":
+    if lang_hint and lang_hint in ALLOWED_LANGUAGE_HINTS:
         job_params["lang_hint"] = lang_hint
 
     if youtube_url:
@@ -170,7 +176,7 @@ def add_song(room_id):
     except:
         # TODO: handle error
         return redirect(url_for("index", room_id=room_id))
-
+    
     playlist.append(job)
     set_queue(playlist)
     socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)

@@ -124,14 +124,17 @@ class WhisperXProgressHook:
 
 loaded_model_desc = None
 loaded_model = None
-def transcribe_audio(audio, progress_cb=None):
+def transcribe_audio(audio, progress_cb=None, lang_hint=None):
     global loaded_model_desc, loaded_model
     
     if progress_cb:
         progress_cb(0.0)
-        
-    lang = detect_audio(audio)
-    logger.info(f'detected: {lang}')
+    
+    if not lang_hint:
+        lang = detect_audio(audio)
+        logger.info(f'detected: {lang}')
+    else:
+        lang = lang_hint
     
     if progress_cb:
         progress_cb(DETECT_LANGUAGE_PROGRESS)
@@ -362,10 +365,11 @@ def output_line(words, selected_word):
 
 def ass_circle(start_layer, x, y, start_time, end_time, fadein_time):
     mid_time = (end_time + start_time) / 2
-    return [rf'Dialogue: {start_layer}, {ass_time(start_time - fadein_time)}, {ass_time(mid_time)}, S1, {{\pos({x}, {y})}}{{\fad({int(fadein_time * 1000)}, 0)}}{{\p1}}m 0 0 b 20 0 20 50 0 50{{\p0}}',
-            rf'Dialogue: {start_layer + 2}, {ass_time(start_time - fadein_time)}, {ass_time(mid_time)}, S1, {{\pos({x}, {y})}}{{\fad({int(fadein_time * 1000)}, 0)}}{{\p1}}m 0 50 b -20 50 -20 0 0 0{{\p0}}{{\r}}',
-            rf'Dialogue: {start_layer + 1}, {ass_time(start_time)}, {ass_time(end_time)}, B1, {{\pos({x + 2.5}, {y})}}{{\org({x - 10}, {y})}}{{\t(\frz-360)}}{{\p1}}m 0 55 b -25 55 -25 0 0 0{{\p0}}{{\r}}',
-            rf'Dialogue: {start_layer}, {ass_time(mid_time)}, {ass_time(end_time)}, S1, {{\pos({x}, {y})}}{{\p1}}m 0 50 b -20 50 -20 0 0 0{{\p0}}{{\r}}']
+    return [rf'Dialogue: {start_layer + 1}, {ass_time(start_time - fadein_time)}, {ass_time(mid_time)}, CW1, {{\pos({x}, {y})}}{{\fad({int(fadein_time * 1000)}, 0)}}{{\p1}}m 0 0 b 20 0 20 50 0 50{{\p0}}',
+            rf'Dialogue: {start_layer + 3}, {ass_time(start_time - fadein_time)}, {ass_time(mid_time)}, CW1, {{\pos({x}, {y})}}{{\fad({int(fadein_time * 1000)}, 0)}}{{\p1}}m 0 50 b -20 50 -20 0 0 0{{\p0}}{{\r}}',
+            rf'Dialogue: {start_layer + 2}, {ass_time(start_time)}, {ass_time(end_time)}, CB1, {{\pos({x + 2.5}, {y})}}{{\org({x - 10}, {y})}}{{\t(\frz-360)}}{{\p1}}m 0 55 b -25 55 -25 0 0 0{{\p0}}{{\r}}',
+            rf'Dialogue: {start_layer + 1}, {ass_time(mid_time)}, {ass_time(end_time)}, CW1, {{\pos({x}, {y})}}{{\p1}}m 0 50 b -20 50 -20 0 0 0{{\p0}}{{\r}}',
+            rf'Dialogue: {start_layer}, {ass_time(start_time - fadein_time)}, {ass_time(end_time)}, CB1, {{\pos({x}, {y})}}{{\fad({int(fadein_time * 1000)}, 0)}}{{\p1}}m 30 0 b 70 0 70 100 30 100 b -10 100 -10 0 30 0{{\p0}}']
 
 
 def make_ass_swap(segments, offset, prepare_time_seconds=5):
@@ -375,9 +379,11 @@ PlayResY: 800
 WrapStyle: 1
 
 [V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Alignment, Encoding
-Style: S1, Arial, 80, &HFFFFFF, &HFFFFFF, &H202020, &H000000, 5, 0
-Style: B1, Arial, 80, &H000000, &H000000, &H202020, &H000000, 5, 0
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Alignment, Encoding, BorderStyle, Outline, Shadow, MarginL, MarginR, MarginV
+Style: CW1, Arial, 80, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 0, 0, 0, 0, 0
+Style: CB1, Arial, 80, &H000000, &H000000, &H000000, &H000000, 5, 0, 0, 0, 0, 0, 0, 0
+Style: W1, Assistant, 80, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
+Style: DW1, KlokanTech Noto Sans, 80, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
 
 [Events]
 Format: Layer, Start, End, Style, Text
@@ -411,6 +417,8 @@ Format: Layer, Start, End, Style, Text
 
     line_to_first_line_in_batch = lambda l: ((l // batch_size) * batch_size)
     first_line_to_last_line = lambda l: (((l // num_lines) * num_lines) + min((l % num_lines) + batch_size - 1, num_lines - 1))
+    
+    #TODO check if assistant can present
 
     ass_lines = []
     last_segment_end = None
@@ -438,11 +446,11 @@ Format: Layer, Start, End, Style, Text
             line_y_off = (i % num_lines) * y_off
 
             #output uncolored line as background
-            ass_lines.append(f'Dialogue: 0, {ass_time(actual_appear_time + offset)}, {ass_time(actual_disappear_time + offset)}, S1, {{\\pos(400, {ystart + line_y_off})}}{{\\fad(1000, 1000)}}{output_line(line, None)}')
+            ass_lines.append(f'Dialogue: 0, {ass_time(actual_appear_time + offset)}, {ass_time(actual_disappear_time + offset)}, W1, {{\\pos(400, {ystart + line_y_off})}}{{\\fad(1000, 1000)}}{output_line(line, None)}')
 
             for word in line:
                 #output colored lines on top
-                ass_lines.append(f'Dialogue: 1, {ass_time(word.start + offset)}, {ass_time(word.end + offset)}, S1, {{\\pos(400, {ystart + line_y_off})}}{output_line(line, word)}')
+                ass_lines.append(f'Dialogue: 1, {ass_time(word.start + offset)}, {ass_time(word.end + offset)}, W1, {{\\pos(400, {ystart + line_y_off})}}{output_line(line, word)}')
 
             #counter
             if len(line) > 1:
@@ -456,7 +464,7 @@ Format: Layer, Start, End, Style, Text
 
     return header + '\n'.join(ass_lines)
 
-def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_silence=0, progress_cb=None):
+def instrumental(audioinput, output_inst, output_vocals=None, start_silence=0, end_silence=0, progress_cb=None):
     if progress_cb:
         progress_cb(0.0)
         
@@ -474,7 +482,7 @@ def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_si
     
     separator.update_parameter(callback=separator_cb)
 
-    origin, separated = separator.separate_audio_file(input)
+    origin, separated = separator.separate_audio_file(audioinput)
     inst = origin - separated['vocals']
 
     silence1 = torch.zeros([2, start_silence * separator.samplerate])
@@ -493,8 +501,22 @@ def instrumental(input, output_inst, output_vocals=None, start_silence=0, end_si
     
     if progress_cb:
         progress_cb(1.0)
+        
+def extract_audio(input, output_audio):
+    try:
+        process = subprocess.run([ffmpeg_path, '-y', '-i', input, '-vn', output_audio], capture_output=True)
+        if process.returncode != 0:
+            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
+    finally:
+        pass
+        
+def try_remove(path):
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
 
-def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None):
+def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, **_):
     global whisper_model_framework
     
     if progress_cb:
@@ -512,41 +534,49 @@ def make_lyrics_video(audiopath, outputpath, transcribe_using_vocals=True, remov
         if progress_cb:
             progress_cb(LYRICS_VIDEO_SEPARATOR_PROGRESS + LYRICS_VIDEO_TRANSCRIBE_PROGRESS + (progress * LYRICS_VIDEO_ALIGN_PROGRESS))
     
-    asspath = replace_ext(audiopath, '.ass')
-    instpath = replace_ext(audiopath, '_inst.mp3')
-    vocalspath = replace_ext(audiopath, '_vocals.mp3') if transcribe_using_vocals else None
-    
-    silence = 1
-    instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
-
-    if transcribe_using_vocals:
-        #vocals already have silence accounted for
-        silence = 0
-        #use vocals only
-        audiopath = vocalspath
-        
-    result = transcribe_audio(audiopath, progress_cb=transcribe_progress_cb)
-    segments = align_audio(result, progress_cb=align_progress_cb)
-    segments = segment(segments)
-    assdata = make_ass_swap(segments, offset=silence + 0.0)
-
-    open(asspath, 'w', encoding='utf8').write(assdata)
-
     try:
-        process = subprocess.run([ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', instpath, '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
+        audiopath = replace_ext(inputpath, '_audio.wav')
+        
+        asspath = replace_ext(inputpath, '.ass')
+        instpath = replace_ext(inputpath, '_inst.mp3')
+        vocalspath = replace_ext(inputpath, '_vocals.mp3') if transcribe_using_vocals else None
+        
+        extract_audio(inputpath, audiopath)
+        
+        silence = 1
+        instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
+
+        if transcribe_using_vocals:
+            #vocals already have silence accounted for
+            silence = 0
+            #use vocals only
+            transcribepath = vocalspath
+        else:
+            transcribepath = audiopath
+            
+        result = transcribe_audio(transcribepath, progress_cb=transcribe_progress_cb, lang_hint=lang_hint)
+        segments = align_audio(result, progress_cb=align_progress_cb)
+        segments = segment(segments)
+        assdata = make_ass_swap(segments, offset=silence + 0.0)
+
+        open(asspath, 'w', encoding='utf8').write(assdata)
+ 
+        process = subprocess.run([ffmpeg_path, '-y', *(['-f', 'lavfi', '-i', 'color=c=black:s=1280x720'] if blank_video else ['-i', inputpath]), '-i', instpath, *([] if blank_video else ['-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0']), '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
         if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.stderr}')
+            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
+            
     finally:
         if remove_intermediates:
-            os.remove(asspath)
-            os.remove(instpath)
+            try_remove(audiopath)
+            try_remove(asspath)
+            try_remove(instpath)
             if vocalspath:
-                os.remove(vocalspath)
+                try_remove(vocalspath)
     
     if progress_cb:
         progress_cb(1.0)
 
-def remove_vocals_from_video(mp4_input, output_path, progress_cb=None):
+def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, **_):
     if progress_cb:
         progress_cb(0.0)
         
@@ -554,27 +584,31 @@ def remove_vocals_from_video(mp4_input, output_path, progress_cb=None):
         if progress_cb:
             progress_cb(progress * REMOVE_VOCALS_SEPARATOR_PROGRESS)
         
-    instpath = replace_ext(mp4_input, '_inst.mp3')
-    instrumental(mp4_input, instpath, progress_cb=instrumental_progress_cb)
-    mp4_input_name, mp4_input_ext = os.path.splitext(mp4_input)
-    new_mp4_input = f'{mp4_input_name}-original{mp4_input_ext}'
-    os.rename(mp4_input, new_mp4_input)
     try:
-        process = subprocess.run([ffmpeg_path, '-y', '-i', new_mp4_input, '-i', instpath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', output_path], capture_output=True)
+        audiopath = replace_ext(mp4_input, '_audio.wav')
+        instpath = replace_ext(mp4_input, '_inst.mp3')
+        extract_audio(mp4_input, audiopath)
+        
+        instrumental(audiopath, instpath, progress_cb=instrumental_progress_cb)
+    
+        process = subprocess.run([ffmpeg_path, '-y', '-i', mp4_input, '-i', instpath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-vcodec', 'h264', output_path], capture_output=True)
         if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.stderr}')
+            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
     finally:
-        pass
-        os.remove(instpath)
+        if remove_intermediates:
+            try_remove(instpath)
+            try_remove(audiopath)
         
     if progress_cb:
         progress_cb(1.0)
         
-def passthrough(input, output, progress_cb=None):
+def passthrough(input, output, progress_cb=None, **_):
     if progress_cb:
         progress_cb(0.0)
         
-    shutil.copy(input, output)
+    process = subprocess.run([ffmpeg_path, '-y', '-i', input, '-c:v', 'copy', '-vcodec', 'h264', output], capture_output=True)
+    if process.returncode != 0:
+        raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode('utf8', errors='ignore')}')
     
     if progress_cb:
         progress_cb(1.0)
@@ -658,6 +692,8 @@ class Job:
     keep : str = 'nothing'
     model_type : str = ''
     no_cache : bool = False
+    lang_hint : str = None
+    blank_video : bool = False
     arg : dict = None
     
     #can change
@@ -707,7 +743,7 @@ class Job:
 
 
 def raise_exception_in_thread(thread, e):
-    ctypes.pythonapi.PyThreadState_SetAsyncExc(thread.native_id, ctypes.py_object(e))
+    ctypes.pythonapi.PyThreadState_SetAsyncExc(thread.ident, ctypes.py_object(e))
     
 lock = None
 event = None
@@ -757,12 +793,9 @@ def work_loop():
                 output = None
                 
                 #work
-                actions = {'nothing': make_lyrics_video, 'video': remove_vocals_from_video, 'all': passthrough}
-                
-                #TODO cache youtube download?
                 
                 if job.url is not None:
-                    download_path, title = youtube_download(job.url, local_upload_dir, audio_only=job.keep == 'nothing', dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
+                    download_path, title = youtube_download(job.url, local_upload_dir, audio_only=(job.keep == 'nothing' and job.blank_video), dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
                     path = canonify_input_file(content=open(download_path, 'rb').read()) #don't delete youtube video file
                 elif job.path is not None:
                     path = canonify_input_file(path=job.path)
@@ -770,7 +803,12 @@ def work_loop():
                     path = canonify_input_file(content=job.data)
                 
                 set_model_framework(job.model_type or default_model_type)
-                output = generate_with_cache(actions[job.keep], path, selectors=dict(keep=job.keep), dont_cache=job.no_cache, progress_cb=process_cb)
+                
+                actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
+                func, available_selectors = actions[job.keep]
+                selectors = {k:v for k,v in dict(keep=job.keep, lang_hint=job.lang_hint, blank_video=job.blank_video).items() if k in available_selectors}
+                
+                output = generate_with_cache(func, path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=job.blank_video, progress_cb=process_cb)
                 
                 #TODO remove canon input file?
                 
@@ -872,6 +910,8 @@ def thread_test():
 #####################################################################################
 
 def main(argv):
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    
     parser = argparse.ArgumentParser(
         description='A karaoke tool to process input songs and create karaoke videos.'
     )
@@ -888,6 +928,12 @@ def main(argv):
         help='Add if its already a lyric/Karaoke video'
     )
     parser.add_argument(
+        '-p', '--passthrough',
+        action='store_true',
+        default=False,
+        help='Just reencode video'
+    )
+    parser.add_argument(
         '-t', '--model-type',
         type=str,
         default=default_model_type,
@@ -899,6 +945,19 @@ def main(argv):
         default=False,
         help='Dont use local video if already generated'
     )
+    parser.add_argument(
+        '-l', '--lang-hint',
+        type=str,
+        default=None,
+        help='Language hint'
+    )
+    parser.add_argument(
+        '-b', '--blank-video',
+        action='store_true',
+        default=False,
+        help='Make a black subtitle video'
+    )
+    
     args = parser.parse_args()
     
     os.makedirs(local_upload_dir, exist_ok=True)
@@ -916,12 +975,26 @@ def main(argv):
     
     def process_cb(progress):
         progress_cb(YOUTUBE_DOWNLOAD_PROGRESS + (progress * (1 - YOUTUBE_DOWNLOAD_PROGRESS)))
+        
+    if args.passthrough:
+        keep = 'all'
+    elif args.keep_video:
+        keep = 'video'
+    else:
+        keep = 'nothing'
 
     if not os.path.isfile(input):  # YT Link
-        input, title = youtube_download(input, local_upload_dir, audio_only=not args.keep_video, progress_cb=youtube_progress_cb)
-        
-    input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
-    generate_with_cache(remove_vocals_from_video if args.keep_video else make_lyrics_video, input, selectors=dict(keep='video' if args.keep_video else 'nothing'), dont_cache=args.dont_use_cache, progress_cb=process_cb)
+        input, title = youtube_download(input, local_upload_dir, audio_only=(keep == 'nothing' and args.blank_video), progress_cb=youtube_progress_cb)
+    
+    canon_input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
+    
+    print(input, canon_input)
+    
+    actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
+    func, available_selectors = actions[keep]
+    selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=args.blank_video).items() if k in available_selectors}
+                
+    generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=args.blank_video)
 
 if __name__ == '__main__':
     main(sys.argv)
