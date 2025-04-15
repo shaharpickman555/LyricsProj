@@ -719,10 +719,10 @@ class Job:
                 id, title, info = youtube_info(self.url)
             elif self.path:
                 title = os.path.splitext(os.path.basename(self.path))[0]
-                info = {size: os.path.getsize(self.path)}
+                info = dict(size=os.path.getsize(self.path))
             elif self.data:
                 title = digest(content=self.data)
-                info = {size: len(self.data)}
+                info = dict(size=len(self.data))
                 
             if getattr(info, 'duration', 0) > max_job_duration or getattr(info, 'size', 0) > max_job_filesize:
                 raise ValueError('Job too big')
