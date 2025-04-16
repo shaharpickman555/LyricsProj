@@ -182,11 +182,6 @@ def add_song(room_id):
     socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
     return redirect(url_for("index", room_id=room_id))
 
-    playlist.append(job)
-    set_queue(playlist)
-    socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
-    return redirect(url_for("index", room_id=room_id))
-
 @app.route("/songs/<path:filename>")
 def serve_song_file(filename):
     return send_from_directory(SONGS_FOLDER, filename)
