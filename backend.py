@@ -506,7 +506,7 @@ def run_process(*args):
     process = subprocess.run(args, capture_output=True)
     if process.returncode != 0:
         raise RuntimeError(f'process failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
-    return process.stdout
+    return process.stdout.decode("utf8", errors="ignore")
         
 def is_video_audio(input):
     output_video = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0')
