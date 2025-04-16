@@ -502,14 +502,26 @@ def instrumental(audioinput, output_inst, output_vocals=None, start_silence=0, e
     if progress_cb:
         progress_cb(1.0)
         
-def extract_audio(input, output_audio):
-    try:
-        process = subprocess.run([ffmpeg_path, '-y', '-i', input, '-vn', output_audio], capture_output=True)
-        if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
-    finally:
-        pass
+def run_process(*args):
+    process = subprocess.run(args, capture_output=True)
+    if process.returncode != 0:
+        raise RuntimeError(f'process failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
+    return process.stdout
         
+def is_video_audio(input):
+    output_video = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0')
+    output_audio = run_process('ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0')
+    return 'video' in output_video, 'audio' in output_audio
+        
+def extract_audio(input, output_audio):
+    run_process(ffmpeg_path, '-y', '-i', input, '-vn', output_audio)
+    
+def audio_with_blank(audiopath, outputpath, subtitles_path=None):
+    run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', instpath, '-shortest', '-fflags', '+shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
+
+def video_with_audio(videopath, audiopath, outputpath, subtitles_path=None):
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-fflags', '+shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
+
 def try_remove(path):
     try:
         os.remove(path)
@@ -543,7 +555,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
         
         extract_audio(inputpath, audiopath)
         
-        silence = 1
+        silence = 0 # TODO video title
         instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
 
         if transcribe_using_vocals:
@@ -560,11 +572,11 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
         assdata = make_ass_swap(segments, offset=silence + 0.0)
 
         open(asspath, 'w', encoding='utf8').write(assdata)
- 
-        process = subprocess.run([ffmpeg_path, '-y', *(['-f', 'lavfi', '-i', 'color=c=black:s=1280x720'] if blank_video else ['-i', inputpath]), '-i', instpath, *([] if blank_video else ['-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0']), '-shortest', '-fflags', '+shortest', '-vf', f'subtitles={asspath}:fontsdir=fonts', '-vcodec', 'h264', outputpath], capture_output=True)
-        if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
-            
+        
+        if blank_video:
+            audio_with_blank(instpath, outputpath, asspath)
+        else:
+            video_with_audio(inputpath, instpath, asspath)
     finally:
         if remove_intermediates:
             try_remove(audiopath)
@@ -576,7 +588,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
     if progress_cb:
         progress_cb(1.0)
 
-def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, **_):
+def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, blank_video=False, **_):
     if progress_cb:
         progress_cb(0.0)
         
@@ -590,10 +602,11 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
         extract_audio(mp4_input, audiopath)
         
         instrumental(audiopath, instpath, progress_cb=instrumental_progress_cb)
-    
-        process = subprocess.run([ffmpeg_path, '-y', '-i', mp4_input, '-i', instpath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-vcodec', 'h264', output_path], capture_output=True)
-        if process.returncode != 0:
-            raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
+        
+        if blank_video:
+            audio_with_blank(instpath, output_path)
+        else:
+            video_with_audio(mp4_input, instpath)
     finally:
         if remove_intermediates:
             try_remove(instpath)
@@ -602,13 +615,14 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
     if progress_cb:
         progress_cb(1.0)
         
-def passthrough(input, output, progress_cb=None, **_):
+def passthrough(input, output, progress_cb=None, blank_video=False, **_):
     if progress_cb:
         progress_cb(0.0)
         
-    process = subprocess.run([ffmpeg_path, '-y', '-i', input, '-c:v', 'copy', '-vcodec', 'h264', output], capture_output=True)
-    if process.returncode != 0:
-        raise RuntimeError(f'ffmpeg failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
+    if blank_video:
+        audio_with_blank(input, output)
+    else:
+        run_process(ffmpeg_path, '-y', '-i', input, '-c:v', 'copy', '-vcodec', 'h264', output)
     
     if progress_cb:
         progress_cb(1.0)
@@ -801,14 +815,21 @@ def work_loop():
                     path = canonify_input_file(path=job.path)
                 else:
                     path = canonify_input_file(content=job.data)
+                    
+                is_video, is_audio = is_video_audio(path)
+                if not is_video and not is_audio:
+                    raise ValueError('Input is not a video or an audio file')
+                    
+                #override if only audio
+                blank_video = job.blank_video if is_video else True
                 
                 set_model_framework(job.model_type or default_model_type)
                 
                 actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
                 func, available_selectors = actions[job.keep]
-                selectors = {k:v for k,v in dict(keep=job.keep, lang_hint=job.lang_hint, blank_video=job.blank_video).items() if k in available_selectors}
+                selectors = {k:v for k,v in dict(keep=job.keep, lang_hint=job.lang_hint, blank_video=blank_video).items() if k in available_selectors}
                 
-                output = generate_with_cache(func, path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=job.blank_video, progress_cb=process_cb)
+                output = generate_with_cache(func, path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, progress_cb=process_cb)
                 
                 #TODO remove canon input file?
                 
