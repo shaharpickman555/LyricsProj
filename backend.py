@@ -265,7 +265,7 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
     ydl_opts = {
         'format': 'mp4',
         'outtmpl': os.path.join(local_dir, f'%(id)s.{ext}'),
-        'nooverwrites': True,
+        'nooverwrites': False,
     }
     
     if audio_only:
@@ -1005,7 +1005,7 @@ def main(argv):
         keep = 'nothing'
 
     if not os.path.isfile(input):  # YT Link
-        input, title = youtube_download(input, local_upload_dir, audio_only=(keep == 'nothing' and args.blank_video), progress_cb=youtube_progress_cb)
+        input, title = youtube_download(input, local_upload_dir, audio_only=(keep == 'nothing' and args.blank_video), dont_cache=args.dont_use_cache, progress_cb=youtube_progress_cb)
     
     canon_input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
     
