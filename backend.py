@@ -509,8 +509,8 @@ def run_process(*args):
     return process.stdout.decode("utf8", errors="ignore")
         
 def is_video_audio(input):
-    output_video = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0')
-    output_audio = run_process('ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0')
+    output_video = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
+    output_audio = run_process('ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
     return 'video' in output_video, 'audio' in output_audio
         
 def extract_audio(input, output_audio):
@@ -570,13 +570,14 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
         segments = align_audio(result, progress_cb=align_progress_cb)
         segments = segment(segments)
         assdata = make_ass_swap(segments, offset=silence + 0.0)
-
-        open(asspath, 'w', encoding='utf8').write(assdata)
+        
+        with open(asspath, 'w', encoding='utf8') as fh:
+            fh.write(assdata)
         
         if blank_video:
             audio_with_blank(instpath, outputpath, asspath)
         else:
-            video_with_audio(inputpath, instpath, asspath)
+            video_with_audio(inputpath, instpath, outputpath, asspath)
     finally:
         if remove_intermediates:
             try_remove(audiopath)
@@ -1009,13 +1010,20 @@ def main(argv):
     
     canon_input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
     
-    print(input, canon_input)
+    is_video, is_audio = is_video_audio(canon_input)
+    if not is_video and not is_audio:
+        raise ValueError('Input is not a video or an audio file')
+        
+    #override if only audio
+    blank_video = args.blank_video if is_video else True
+    
+    print(input, canon_input, is_video, is_audio)
     
     actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
     func, available_selectors = actions[keep]
-    selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=args.blank_video).items() if k in available_selectors}
+    selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=blank_video).items() if k in available_selectors}
                 
-    generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=args.blank_video)
+    generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=blank_video)
 
 if __name__ == '__main__':
     main(sys.argv)
