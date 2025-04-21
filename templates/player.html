@@ -1,321 +1,171 @@
+<!-- templates/player.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Karaoke Player</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Optional: Minimal Bootstrap usage -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+<meta charset="UTF-8">
+<title>Karaoke Player</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 
-  <style>
-    /* Page defaults: white background, black text (normal mode) */
-    body {
-      background-color: #fff;
-      color: #000;
-      margin: 0;
-      padding: 0;
-      font-family: sans-serif;
-    }
-    .container {
-      padding: 1rem;
-    }
-
-    #player-container {
-      position: relative;
-      background-color: #fff;
-      border: 1px solid #000;
-      padding: 0;
-      margin: 0 auto;
-      max-width: 800px; /* adjust as desired */
-    }
-
-    /* Fullscreen styles */
-    #player-container:fullscreen,
-    #player-container:-webkit-full-screen,
-    #player-container:-moz-full-screen,
-    #player-container:-ms-fullscreen {
-      background-color: #000 !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    #player-container:fullscreen video,
-    #player-container:-webkit-full-screen video,
-    #player-container:-moz-full-screen video,
-    #player-container:-ms-fullscreen video {
-      background-color: #000;
-      border: 1px solid #000;
-      padding: 0 !important;
-      margin: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: contain;
-    }
-
-    /* QR in fullscreen */
-    #qrFullscreen {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      display: none;
-      z-index: 9999;
-    }
-
-    /* Exit Fullscreen button in fullscreen */
-    #exitFullscreenBtn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      display: none;
-      z-index: 9999;
-      background-color: #fff;
-      color: #000;
-      border: none;
-      padding: 0.5rem 1rem;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    #exitFullscreenBtn:hover {
-      background-color: #eee;
-    }
-  </style>
+<style>
+/* page */
+body{margin:0;background:#fff;color:#000;font-family:sans-serif;}
+.container{padding:1rem;}
+/* wrapper */
+#player-container{position:relative;max-width:800px;margin:0 auto;border:1px solid #000;background:#000;min-height:270px;}
+/* video */
+video{width:100%;height:auto;display:block;background:#000;}
+/* controls bar */
+#controlsBar{position:absolute;bottom:0;left:0;right:0;z-index:9;
+  display:flex;align-items:center;gap:.5rem;padding:0 .5rem;height:42px;
+  background:#0008;color:#fff;font-size:15px;user-select:none;}
+#controlsBar button{padding:.25rem .55rem;}
+#seekBar{flex:1;appearance:none;height:4px;background:#666;border-radius:2px;cursor:pointer;}
+#seekBar::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#0d6efd;}
+#seekBar::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#0d6efd;border:none;}
+/* QR overlay */
+#qrOverlay{position:absolute;top:10px;left:10px;z-index:8;}
+/* fullscreen */
+#player-container:fullscreen,
+#player-container:-webkit-full-screen,
+#player-container:-moz-full-screen,
+#player-container:-ms-fullscreen{width:100%!important;height:100%!important;margin:0;background:#000;}
+#player-container:fullscreen video,
+#player-container:-webkit-full-screen video,
+#player-container:-moz-full-screen video,
+#player-container:-ms-fullscreen video{width:100%!important;height:100%!important;object-fit:contain;}
+</style>
 </head>
 <body>
-  <div class="container text-center">
-    <h1 class="text-center" style="margin:5px; line-height:1.1;">
-      Now Playing<br>
-      <span style="font-size:32px;">Room: {{ room_id }}</span>
-    </h1>
+<div class="container text-center">
+  <h1 style="margin:5px;line-height:1.1;">Now Playing<br><span style="font-size:32px;">Room: {{ room_id }}</span></h1>
 
-    <div id="player-container">
-      {% if current_song %}
-        <video
-          id="videoPlayer"
-          class="w-100"
-          controls
-          autoplay
-          controlsList="nodownload noremoteplayback"
-          disablePictureInPicture
-        >
-          <source src="/{{ current_song.out_path }}" type="video/mp4">
-          Your browser does not support the video tag.
-        </video>
-
-        <!-- Next Song / Go Fullscreen Buttons -->
-        <div class="mt-3">
-          <form id="nextSongForm" style="display:inline-block;">
-            <button type="submit" class="btn btn-primary me-2">Next Song</button>
-          </form>
-          <button id="goFullscreenBtn" class="btn btn-secondary">Go Fullscreen</button>
-        </div>
-
-        <!-- Fullscreen-only QR top-left -->
-        <div id="qrFullscreen">
-          <img
-            src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}"
-            width="100"
-            height="100"
-            alt="QR code (black squares on white)"
-          />
-        </div>
-
-        <!-- White "Exit Fullscreen" button top-right -->
-        <button id="exitFullscreenBtn">Exit Fullscreen</button>
-
-      {% else %}
-        <p class="text-muted">No songs available to play.</p>
-      {% endif %}
-    </div>
-
-    <!-- "Open Playlist" button -->
-    <div class="mt-4">
-      <a href="/{{ room_id }}" target="_blank" class="btn btn-dark">Open Playlist</a>
-    </div>
-
-    <!-- Bottom QR code (regular black squares on white) -->
-    <div class="mt-3">
-      <p>Scan to open this room's Playlist:</p>
-      <img
-        src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}"
-        width="200"
-        height="200"
-        alt="QR code to open playlist"
-      >
-    </div>
+  <div id="player-container">
+    {% if current_song %}
+      {% include "player_inner.html" %}
+    {% else %}
+      <p id="emptyMsg" class="text-muted m-2">No songs available to play.</p>
+    {% endif %}
   </div>
 
-  <script>
-    var socket = io();
-    const roomId = "{{ room_id }}";
+  <div class="mt-3"><a href="/{{ room_id }}" target="_blank" class="btn btn-dark">Open Playlist</a></div>
 
-    // Connect to Socket.IO
-    socket.on('connect', () => {
-      socket.emit("join_room", { room_id: roomId });
-      console.log("Connected to Socket.IO, joined room:", roomId);
-    });
+  <div class="mt-3">
+    <p>Scan to open this room's Playlist:</p>
+    <img src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}" width="200" height="200" alt="QR">
+  </div>
+</div>
 
-    // Update video when "player_updated" event arrives
-    socket.on("player_updated", (data) => {
-      const playerContainer = document.getElementById("player-container");
-      if (data.current_song) {
-        playerContainer.innerHTML = `
-          <video
-            id="videoPlayer"
-            class="w-100"
-            controls
-            autoplay
-            controlsList="nodownload noremoteplayback"
-            disablePictureInPicture
-          >
-            <source src="/${data.current_song}" type="video/mp4">
-            Your browser does not support the video tag.
-          </video>
+<script id="innerTemplate" type="text/template">
+  <video id="videoPlayer" autoplay disablePictureInPicture controlslist="nodownload noremoteplayback">
+    <source src="/__SRC__" type="video/mp4">
+  </video>
 
-          <div class="mt-3">
-            <form id="nextSongForm" style="display:inline-block;">
-              <button type="submit" class="btn btn-primary me-2">Next Song</button>
-            </form>
-            <button id="goFullscreenBtn" class="btn btn-secondary">Go Fullscreen</button>
-          </div>
+  <div id="qrOverlay">
+    <img id="qrImg" src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}" width="100" height="100" alt="QR">
+  </div>
 
-          <div id="qrFullscreen" style="position:absolute; top:10px; left:10px; display:none; z-index:9999;">
-            <img
-              src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}"
-              width="100"
-              height="100"
-              alt="QR code (black squares on white)"
-            />
-          </div>
-          <button
-            id="exitFullscreenBtn"
-            style="
-              position: absolute;
-              top: 10px;
-              right: 10px;
-              display: none;
-              z-index: 9999;
-              background-color: #fff;
-              color: #000;
-              border: none;
-              padding: 0.5rem 1rem;
-              font-weight: bold;
-              cursor: pointer;
-            "
-          >
-            Exit Fullscreen
-          </button>
-        `;
-        attachHandlers(); // reattach event listeners
-      } else {
-        if (data.in_process) {
-          playerContainer.innerHTML = `<p class="text-muted">No songs are done yet; waiting on processing.</p>`;
-        } else {
-          playerContainer.innerHTML = `<p class="text-muted">No songs available to play.</p>`;
-        }
-      }
-    });
+  <div id="controlsBar">
+    <button id="playBtn" class="btn btn-sm btn-light">►</button>
+    <span  id="timeLbl" style="min-width:90px;">0:00 / 0:00</span>
+    <input  id="seekBar" type="range" min="0" value="0" step="0.1">
+    <button id="fsBtn"  class="btn btn-sm btn-light">⛶</button>
+    <button id="qrBtn"  class="btn btn-sm btn-light">QR</button>
+    <button id="nextBtn" class="btn btn-sm btn-danger ms-2">Next</button>
+  </div>
+</script>
 
-    document.addEventListener("DOMContentLoaded", attachHandlers);
+<script>
+/* helper for formatting seconds */
+const fmt=s=>{s=Math.floor(s);return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;};
 
-    function attachHandlers() {
-      // "Next Song" form
-      const form = document.getElementById("nextSongForm");
-      if (form) {
-        form.addEventListener("submit", function (event) {
-          event.preventDefault();
-          doNextSong();
-        });
-      }
+/* build / rebuild inner player markup */
+function injectPlayer(src){
+  document.getElementById("player-container").style.background   = "#000";
+  const tmpl=document.getElementById("innerTemplate").textContent.replace("__SRC__",src);
+  document.getElementById("player-container").innerHTML=tmpl;
+  initCustomControls();           // attach JS
+}
 
-      // "Go Fullscreen"
-      const goFsBtn = document.getElementById("goFullscreenBtn");
-      if (goFsBtn) {
-        goFsBtn.addEventListener("click", () => {
-          requestFullscreen(document.getElementById("player-container"));
-        });
-      }
+/*──────────────── custom controls ────────────────*/
+function initCustomControls(){
+  const wrap=document.getElementById("player-container");
+  const vid =document.getElementById("videoPlayer");
+  if(!vid) return;
 
-      // "Exit Fullscreen"
-      const exitFsBtn = document.getElementById("exitFullscreenBtn");
-      if (exitFsBtn) {
-        exitFsBtn.addEventListener("click", exitFullscreen);
-      }
+  const playBtn=document.getElementById("playBtn");
+  const fsBtn  =document.getElementById("fsBtn");
+  const qrBtn  =document.getElementById("qrBtn");
+  const qrImg  =document.getElementById("qrImg");
+  const seek   =document.getElementById("seekBar");
+  const timeLbl=document.getElementById("timeLbl");
+  const nextBtn=document.getElementById("nextBtn");
 
-      // Auto-next when video ends
-      const video = document.getElementById("videoPlayer");
-      if (video) {
-        video.addEventListener("ended", function() {
-          console.log("Video ended, automatically going to next song.");
-          doNextSong();
-        });
-      }
+  /* play / pause */
+  const togglePlay=()=>vid.paused?vid.play():vid.pause();
+  const updIcon =()=>playBtn.textContent=vid.paused?"►":"❚❚";
+  playBtn.onclick=togglePlay; vid.onclick=togglePlay;
+  vid.onplay=updIcon; vid.onpause=updIcon;
+
+  /* dblclick FS + button */
+  function toggleFs(){
+    const fs=document.fullscreenElement||document.webkitFullscreenElement||
+             document.mozFullScreenElement||document.msFullscreenElement;
+    if(fs){
+      (document.exitFullscreen||document.webkitExitFullscreen||
+       document.mozCancelFullScreen||document.msExitFullscreen).call(document);
+    }else{
+      (wrap.requestFullscreen||wrap.webkitRequestFullscreen||
+       wrap.mozRequestFullScreen||wrap.msRequestFullscreen).call(wrap);
     }
+  }
+  fsBtn.onclick=toggleFs; vid.ondblclick=toggleFs;
 
-    // Helper function to request next song
-    function doNextSong() {
-      fetch("/next_song/" + roomId, { method: "POST" })
-        .then(() => console.log("Next song requested."))
-        .catch(err => console.error("Error requesting next song:", err));
-    }
+  /* qr */
+  let qrVis=true; qrBtn.onclick=()=>{qrVis=!qrVis;qrImg.style.display=qrVis?"block":"none";qrBtn.style.opacity=qrVis?1:.5;};
 
-    // Cross-browser request fullscreen
-    function requestFullscreen(el) {
-      if (el.requestFullscreen) {
-        el.requestFullscreen();
-      } else if (el.webkitRequestFullscreen) {
-        el.webkitRequestFullscreen();
-      } else if (el.mozRequestFullScreen) {
-        el.mozRequestFullScreen();
-      } else if (el.msRequestFullscreen) {
-        el.msRequestFullscreen();
-      }
-    }
+  /* progress */
+  let seeking=false;
+  vid.onloadedmetadata=()=>{seek.max=vid.duration;timeLbl.textContent=`0:00 / ${fmt(vid.duration)}`;};
+  vid.ontimeupdate=()=>{if(!seeking)seek.value=vid.currentTime;timeLbl.textContent=`${fmt(vid.currentTime)} / ${fmt(vid.duration||0)}`;};
+  seek.oninput=()=>{seeking=true;timeLbl.textContent=`${fmt(seek.value)} / ${fmt(vid.duration||0)}`;};
+  seek.onchange=()=>{vid.currentTime=seek.valueAsNumber;seeking=false;};
 
-    // Cross-browser exit fullscreen
-    function exitFullscreen() {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      } else if (document.webkitExitFullscreen) {
-        document.webkitExitFullscreen();
-      } else if (document.mozCancelFullScreen) {
-        document.mozCancelFullScreen();
-      } else if (document.msExitFullscreen) {
-        document.msExitFullscreen();
-      }
-    }
+  /* next */
+  const roomId="{{ room_id }}";
+  const toNext=()=>fetch(`/next_song/${roomId}`,{method:"POST"});
+  nextBtn.onclick=toNext; vid.onended=toNext;
+}
 
-    // Show/hide the small QR overlay + "Exit Fullscreen" button only when container is fullscreen
-    function onFullscreenChange() {
-      const fsElement =
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement ||
-        document.msFullscreenElement;
+/*──────────────── socket‑io ────────────────*/
+const roomId="{{ room_id }}";
+let currentSrc="{{ current_song.out_path if current_song else '' }}";
 
-      const container = document.getElementById("player-container");
-      const qrFs = document.getElementById("qrFullscreen");
-      const exitFsBtn = document.getElementById("exitFullscreenBtn");
+const socket=io();
+socket.on("connect",()=>socket.emit("join_room",{room_id:roomId}));
 
-      if (fsElement === container) {
-        // We are in fullscreen on #player-container
-        if (qrFs) qrFs.style.display = "block";
-        if (exitFsBtn) exitFsBtn.style.display = "block";
-      } else {
-        // Not in fullscreen
-        if (qrFs) qrFs.style.display = "none";
-        if (exitFsBtn) exitFsBtn.style.display = "none";
-      }
-    }
+socket.on("player_updated",data=>{
+  const cont=document.getElementById("player-container");
 
-    // Listen to all possible fullscreen change events
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
-    document.addEventListener("mozfullscreenchange", onFullscreenChange);
-    document.addEventListener("MSFullscreenChange", onFullscreenChange);
-  </script>
+  if(data.current_song){
+      if(data.current_song===currentSrc) return;   // nothing new
+      currentSrc=data.current_song;
+      injectPlayer(currentSrc);                    // swap video & controls
+  }else{
+      currentSrc="";
+      cont.style.background="#fff";
+      cont.innerHTML=`<p class="text-muted m-2">${
+          data.in_process?
+          "No songs are done yet; waiting on processing.":
+          "No songs available to play."
+      }</p>`;
+  }
+});
+
+/* first time attach */
+document.addEventListener("DOMContentLoaded",()=>{initCustomControls();});
+</script>
 </body>
 </html>
