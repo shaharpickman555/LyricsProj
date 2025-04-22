@@ -1,171 +1,203 @@
-<!-- templates/player.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Karaoke Player</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <meta charset="UTF-8">
+  <title>Karaoke Player</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<style>
-/* page */
-body{margin:0;background:#fff;color:#000;font-family:sans-serif;}
-.container{padding:1rem;}
-/* wrapper */
-#player-container{position:relative;max-width:800px;margin:0 auto;border:1px solid #000;background:#000;min-height:270px;}
-/* video */
-video{width:100%;height:auto;display:block;background:#000;}
-/* controls bar */
-#controlsBar{position:absolute;bottom:0;left:0;right:0;z-index:9;
-  display:flex;align-items:center;gap:.5rem;padding:0 .5rem;height:42px;
-  background:#0008;color:#fff;font-size:15px;user-select:none;}
-#controlsBar button{padding:.25rem .55rem;}
-#seekBar{flex:1;appearance:none;height:4px;background:#666;border-radius:2px;cursor:pointer;}
-#seekBar::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#0d6efd;}
-#seekBar::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#0d6efd;border:none;}
-/* QR overlay */
-#qrOverlay{position:absolute;top:10px;left:10px;z-index:8;}
-/* fullscreen */
-#player-container:fullscreen,
-#player-container:-webkit-full-screen,
-#player-container:-moz-full-screen,
-#player-container:-ms-fullscreen{width:100%!important;height:100%!important;margin:0;background:#000;}
-#player-container:fullscreen video,
-#player-container:-webkit-full-screen video,
-#player-container:-moz-full-screen video,
-#player-container:-ms-fullscreen video{width:100%!important;height:100%!important;object-fit:contain;}
-</style>
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+
+  <style>
+    body{margin:0;font-family:sans-serif;background:#fff;color:#000}
+    .container{padding:1rem}
+
+    /* -------- wrapper ---------- */
+    #player-container{
+      position:relative;background:#fff;border:1px solid #000;
+      max-width:800px;margin:0 auto;padding:0
+    }
+
+    /* -------- video ------------ */
+    #videoPlayer{width:100%;display:block}
+
+    /* -------- fullscreen ------- */
+    #player-container:fullscreen,
+    #player-container:-webkit-full-screen,
+    #player-container:-moz-full-screen,
+    #player-container:-ms-fullscreen{
+      background:#000!important;width:100%!important;height:100%!important;
+    }
+    #player-container:fullscreen #videoPlayer,
+    #player-container:-webkit-full-screen #videoPlayer,
+    #player-container:-moz-full-screen #videoPlayer,
+    #player-container:-ms-fullscreen #videoPlayer{
+      width:100%!important;height:100%!important;object-fit:contain
+    }
+
+    /* -------- QR watermark ----- */
+    #qrMark{
+      position:absolute;top:10px;left:10px;width:90px;height:90px;
+      z-index:30;background:rgba(0,0,0,.65);padding:4px;border-radius:4px
+    }
+
+    /* -------- toolbar ---------- */
+    .vjs-bar{
+      position:absolute;left:0;right:0;bottom:0;z-index:40;
+      height:44px;display:flex;align-items:center;gap:.8rem;
+      background:rgba(0,0,0,.78);color:#fff;padding:0 .8rem;
+      font-size:18px;user-select:none
+    }
+    .vjs-btn{cursor:pointer}
+    .vjs-btn:hover{color:#0d6efd}
+
+    #vProgress{flex:1;height:4px;appearance:none;background:#555;border-radius:2px}
+    #vProgress::-webkit-slider-thumb{
+      appearance:none;width:14px;height:14px;border-radius:50%;background:#0d6efd
+    }
+    .right-group{display:flex;gap:0.9rem;margin-left:auto}
+
+    /* -------- empty text ------- */
+    #player-container .empty-msg{padding:1rem;color:#666}
+  </style>
 </head>
 <body>
-<div class="container text-center">
-  <h1 style="margin:5px;line-height:1.1;">Now Playing<br><span style="font-size:32px;">Room: {{ room_id }}</span></h1>
+  <div class="container text-center">
+    <h1 class="mb-2">Now Playing<br>
+      <span style="font-size:32px">Room: {{ room_id }}</span></h1>
 
-  <div id="player-container">
-    {% if current_song %}
-      {% include "player_inner.html" %}
-    {% else %}
-      <p id="emptyMsg" class="text-muted m-2">No songs available to play.</p>
-    {% endif %}
+    <div id="player-container"></div>
+
+    <div class="mt-4">
+      <a href="/{{ room_id }}" target="_blank" class="btn btn-dark">Open Playlist</a>
+    </div>
+
+    <div class="mt-3">
+      <p>Scan to open this room's Playlist:</p>
+      <img src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}"
+           width="200" height="200" alt="QR code">
+    </div>
   </div>
 
-  <div class="mt-3"><a href="/{{ room_id }}" target="_blank" class="btn btn-dark">Open Playlist</a></div>
+  <!-- reusable widget markup -->
+  <template id="playerTemplate">
+    <video id="videoPlayer" autoplay playsinline muted></video>
 
-  <div class="mt-3">
-    <p>Scan to open this room's Playlist:</p>
-    <img src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}" width="200" height="200" alt="QR">
-  </div>
-</div>
+    <div id="qrMark">
+      <img src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}"
+           width="100" height="100" alt="QR code">
+    </div>
 
-<script id="innerTemplate" type="text/template">
-  <video id="videoPlayer" autoplay disablePictureInPicture controlslist="nodownload noremoteplayback">
-    <source src="/__SRC__" type="video/mp4">
-  </video>
+    <div class="vjs-bar">
+      <span id="btnPlay" class="vjs-btn" title="Play / Pause">⏸</span>
 
-  <div id="qrOverlay">
-    <img id="qrImg" src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}" width="100" height="100" alt="QR">
-  </div>
+      <input id="vProgress" type="range" min="0" value="0" step="0.1">
+      <span id="timeLabel" style="width:115px;text-align:right">0:00 / 0:00</span>
 
-  <div id="controlsBar">
-    <button id="playBtn" class="btn btn-sm btn-light">►</button>
-    <span  id="timeLbl" style="min-width:90px;">0:00 / 0:00</span>
-    <input  id="seekBar" type="range" min="0" value="0" step="0.1">
-    <button id="fsBtn"  class="btn btn-sm btn-light">⛶</button>
-    <button id="qrBtn"  class="btn btn-sm btn-light">QR</button>
-    <button id="nextBtn" class="btn btn-sm btn-danger ms-2">Next</button>
-  </div>
-</script>
+      <div class="right-group">
+        <span id="btnNext" class="vjs-btn" title="Next song">⏭</span>
+        <span id="btnQR"   class="vjs-btn" title="Show / hide QR">QR</span>
+        <span id="btnFS"   class="vjs-btn" title="Fullscreen">⤢</span>
+      </div>
+    </div>
+  </template>
 
-<script>
-/* helper for formatting seconds */
-const fmt=s=>{s=Math.floor(s);return `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;};
+  <script>
+    /* ---------- socket.IO (original flow) ------------------- */
+    const socket = io();
+    const roomId = "{{ room_id }}";
+    socket.on('connect', () => socket.emit("join_room", { room_id: roomId }));
 
-/* build / rebuild inner player markup */
-function injectPlayer(src){
-  document.getElementById("player-container").style.background   = "#000";
-  const tmpl=document.getElementById("innerTemplate").textContent.replace("__SRC__",src);
-  document.getElementById("player-container").innerHTML=tmpl;
-  initCustomControls();           // attach JS
-}
+    const cont = document.getElementById("player-container");
+    let currentSrc = "";
 
-/*──────────────── custom controls ────────────────*/
-function initCustomControls(){
-  const wrap=document.getElementById("player-container");
-  const vid =document.getElementById("videoPlayer");
-  if(!vid) return;
+    /* ---------- utils --------------------------------------- */
+    const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
 
-  const playBtn=document.getElementById("playBtn");
-  const fsBtn  =document.getElementById("fsBtn");
-  const qrBtn  =document.getElementById("qrBtn");
-  const qrImg  =document.getElementById("qrImg");
-  const seek   =document.getElementById("seekBar");
-  const timeLbl=document.getElementById("timeLbl");
-  const nextBtn=document.getElementById("nextBtn");
+    function injectPlayer(src){
+      currentSrc = src;
+      cont.style.background="#000";
+      cont.innerHTML = document.getElementById("playerTemplate").innerHTML;
 
-  /* play / pause */
-  const togglePlay=()=>vid.paused?vid.play():vid.pause();
-  const updIcon =()=>playBtn.textContent=vid.paused?"►":"❚❚";
-  playBtn.onclick=togglePlay; vid.onclick=togglePlay;
-  vid.onplay=updIcon; vid.onpause=updIcon;
+      const vid    = cont.querySelector("#videoPlayer");
+      const playBt = cont.querySelector("#btnPlay");
+      const nextBt = cont.querySelector("#btnNext");
+      const fsBt   = cont.querySelector("#btnFS");
+      const qrBt   = cont.querySelector("#btnQR");
+      const qrBox  = cont.querySelector("#qrMark");
+      const prog   = cont.querySelector("#vProgress");
+      const label  = cont.querySelector("#timeLabel");
 
-  /* dblclick FS + button */
-  function toggleFs(){
-    const fs=document.fullscreenElement||document.webkitFullscreenElement||
-             document.mozFullScreenElement||document.msFullscreenElement;
-    if(fs){
-      (document.exitFullscreen||document.webkitExitFullscreen||
-       document.mozCancelFullScreen||document.msExitFullscreen).call(document);
-    }else{
-      (wrap.requestFullscreen||wrap.webkitRequestFullscreen||
-       wrap.mozRequestFullScreen||wrap.msRequestFullscreen).call(wrap);
+      vid.src = "/"+src;
+
+      vid.addEventListener("loadedmetadata",()=>{
+        prog.max = vid.duration;
+        label.textContent = `0:00 / ${toHMS(vid.duration)}`;
+      });
+      vid.addEventListener("timeupdate",()=>{
+        prog.value = vid.currentTime;
+        label.textContent = `${toHMS(vid.currentTime)} / ${toHMS(vid.duration)}`;
+      });
+      prog.oninput = e => vid.currentTime = +e.target.value;
+
+      const togglePlay = ()=> vid.paused ? vid.play() : vid.pause();
+      playBt.onclick = togglePlay;
+      vid.onclick    = togglePlay;
+      vid.onplay  = ()=> playBt.textContent="⏸";
+      vid.onpause = ()=> playBt.textContent="▶";
+
+      const reqFull = el => (el.requestFullscreen||el.webkitRequestFullscreen||
+                             el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
+      const exitFull= () => (document.exitFullscreen||document.webkitExitFullscreen||
+                             document.mozCancelFullScreen||document.msExitFullscreen).call(document);
+      const toggleFull = el =>
+        document.fullscreenElement ? exitFull() : reqFull(el);
+
+      fsBt.onclick   = ()=> toggleFull(cont);
+      vid.ondblclick = ()=> toggleFull(cont);
+
+      /* ---- QR toggle ---------- */
+      let qrVisible = true;
+      qrBt.onclick = ()=>{qrVisible=!qrVisible;qrBox.style.display=qrVisible?"block":"none"};
+
+      /* ---- Next song ---------- */
+      nextBt.onclick = triggerNext;
+      vid.onended    = triggerNext;
+      function triggerNext(){
+        doNextSong();                 // stay in fullscreen now
+      }
     }
-  }
-  fsBtn.onclick=toggleFs; vid.ondblclick=toggleFs;
 
-  /* qr */
-  let qrVis=true; qrBtn.onclick=()=>{qrVis=!qrVis;qrImg.style.display=qrVis?"block":"none";qrBtn.style.opacity=qrVis?1:.5;};
+    /* ---------- server push ------------------------------- */
+    socket.on("player_updated", data=>{
+      if(data.current_song){
+        if(data.current_song !== currentSrc) injectPlayer(data.current_song);
+      }else{
+        currentSrc="";
+        cont.style.background="#fff";
+        cont.innerHTML =
+          `<p class="empty-msg text-muted">${
+            data.in_process ?
+              "No songs are done yet; waiting on processing." :
+              "No songs available to play."
+          }</p>`;
+      }
+    });
 
-  /* progress */
-  let seeking=false;
-  vid.onloadedmetadata=()=>{seek.max=vid.duration;timeLbl.textContent=`0:00 / ${fmt(vid.duration)}`;};
-  vid.ontimeupdate=()=>{if(!seeking)seek.value=vid.currentTime;timeLbl.textContent=`${fmt(vid.currentTime)} / ${fmt(vid.duration||0)}`;};
-  seek.oninput=()=>{seeking=true;timeLbl.textContent=`${fmt(seek.value)} / ${fmt(vid.duration||0)}`;};
-  seek.onchange=()=>{vid.currentTime=seek.valueAsNumber;seeking=false;};
+    /* ---------- initial render ---------------------------- */
+    {% if current_song %}
+      injectPlayer("{{ current_song.out_path }}");
+    {% else %}
+      cont.innerHTML='<p class="empty-msg text-muted">No songs available to play.</p>';
+    {% endif %}
 
-  /* next */
-  const roomId="{{ room_id }}";
-  const toNext=()=>fetch(`/next_song/${roomId}`,{method:"POST"});
-  nextBtn.onclick=toNext; vid.onended=toNext;
-}
-
-/*──────────────── socket‑io ────────────────*/
-const roomId="{{ room_id }}";
-let currentSrc="{{ current_song.out_path if current_song else '' }}";
-
-const socket=io();
-socket.on("connect",()=>socket.emit("join_room",{room_id:roomId}));
-
-socket.on("player_updated",data=>{
-  const cont=document.getElementById("player-container");
-
-  if(data.current_song){
-      if(data.current_song===currentSrc) return;   // nothing new
-      currentSrc=data.current_song;
-      injectPlayer(currentSrc);                    // swap video & controls
-  }else{
-      currentSrc="";
-      cont.style.background="#fff";
-      cont.innerHTML=`<p class="text-muted m-2">${
-          data.in_process?
-          "No songs are done yet; waiting on processing.":
-          "No songs available to play."
-      }</p>`;
-  }
-});
-
-/* first time attach */
-document.addEventListener("DOMContentLoaded",()=>{initCustomControls();});
-</script>
+    /* ---------- helper ------------------------------------ */
+    function doNextSong(){
+      fetch(`/next_song/${roomId}`,{method:"POST"})
+        .catch(err=>console.error("next_song error",err));
+    }
+  </script>
 </body>
 </html>
