@@ -43,19 +43,31 @@
     }
 
     /* -------- QR watermark ----- */
-    #qrMark{
-      position:absolute;top:10px;left:10px;
-      width:clamp(90px,10vmin,160px);      /*   << keeps good proportion  */
-      height:clamp(90px,10vmin,160px);     /*                              */
-      z-index:30;
-    }
+  #qrMark{
+    position:absolute;
+    top:1.5%;               /* keep it tucked a bit from the corner          */
+    left:1.5%;
+    width:10%;              /* ←‑‑‑‑‑ 10 % of the player’s width              */
+    max-width:200px;        /* cap it for very large screens                 */
+    aspect-ratio:1/1;       /* stay perfectly square                         */
+    z-index:30;
+  }
+  #qrMark img{              /* image simply fills the wrapper                */
+    width:100%;
+    height:100%;
+    display:block;
+  }
 
-    #qrMark img{
-      width:100%;            /* image = wrapper = no clipping lines         */
-      height:100%;
-      display:block;         /* removes extra 2 px baseline gap             */
+    /* ---------- QR watermark when player is fullscreen ---------- */
+    #player-container:fullscreen #qrMark,
+    #player-container:-webkit-full-screen #qrMark,
+    #player-container:-moz-full-screen #qrMark,
+    #player-container:-ms-fullscreen #qrMark{
+      /*   ~14 % of the shorter viewport edge,    */
+      /*   but never larger than 200 px           */
+      width:min(200px,14vmin);
+      height:min(200px,14vmin);
     }
-
     /* -------- toolbar ---------- */
     .vjs-bar{
       position:absolute;left:0;right:0;bottom:0;z-index:40;
