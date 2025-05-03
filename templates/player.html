@@ -22,10 +22,7 @@
 
     /* -------- video ------------ */
     #videoPlayer{
-      width:100%;
-      height:100%;          /* let it obey the parent's height */
-      object-fit:contain;   /* <‑‑ this line prevents cropping */
-      background:#000;      /* bars will be black rather than transparent */
+      width:100%;height:100%;object-fit:contain;background:#000
     }
 
     /* -------- fullscreen ------- */
@@ -43,31 +40,12 @@
     }
 
     /* -------- QR watermark ----- */
-  #qrMark{
-    position:absolute;
-    top:1.5%;               /* keep it tucked a bit from the corner          */
-    left:1.5%;
-    width:10%;              /* ←‑‑‑‑‑ 10 % of the player’s width              */
-    max-width:200px;        /* cap it for very large screens                 */
-    aspect-ratio:1/1;       /* stay perfectly square                         */
-    z-index:30;
-  }
-  #qrMark img{              /* image simply fills the wrapper                */
-    width:100%;
-    height:100%;
-    display:block;
-  }
-
-    /* ---------- QR watermark when player is fullscreen ---------- */
-    #player-container:fullscreen #qrMark,
-    #player-container:-webkit-full-screen #qrMark,
-    #player-container:-moz-full-screen #qrMark,
-    #player-container:-ms-fullscreen #qrMark{
-      /*   ~14 % of the shorter viewport edge,    */
-      /*   but never larger than 200 px           */
-      width:min(200px,14vmin);
-      height:min(200px,14vmin);
+    #qrMark{
+      position:absolute;top:1.5%;left:1.5%;
+      width:10%;max-width:200px;aspect-ratio:1/1;z-index:30;display:none
     }
+    #qrMark img{width:100%;height:100%;display:block}
+
     /* -------- toolbar ---------- */
     .vjs-bar{
       position:absolute;left:0;right:0;bottom:0;z-index:40;
@@ -90,7 +68,7 @@
 </head>
 <body>
   <div class="container text-center">
-    <h1 class="mb-2">Now Playing<br>
+    <h1 class="mb-2">Now&nbsp;Playing<br>
       <span style="font-size:32px">Room: {{ room_id }}</span></h1>
 
     <div id="player-container"></div>
@@ -111,19 +89,19 @@
     <video id="videoPlayer" autoplay playsinline></video>
 
     <div id="qrMark">
-      <img  src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}"
-        alt="QR code">
+      <img src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}"
+           alt="QR code">
     </div>
 
     <div class="vjs-bar">
       <span id="btnPlay" class="vjs-btn" title="Play / Pause">⏸</span>
 
       <input id="vProgress" type="range" min="0" value="0" step="0.1">
-      <span id="timeLabel" style="width:115px;text-align:right">0:00 / 0:00</span>
+      <span id="timeLabel" style="width:115px;text-align:right">0:00&nbsp;/&nbsp;0:00</span>
 
       <div class="right-group">
         <span id="btnNext" class="vjs-btn" title="Next song">⏭</span>
-        <span id="btnQR"   class="vjs-btn" title="Show / hide QR">QR</span>
+        <span id="btnQR"   class="vjs-btn" title="Show / hide QR">Show QR</span>
         <span id="btnFS"   class="vjs-btn" title="Fullscreen">⤢</span>
       </div>
     </div>
@@ -138,9 +116,10 @@
     const cont = document.getElementById("player-container");
     let currentSrc = "";
 
-    /* ---------- utils --------------------------------------- */
+    /* ---------- helpers ------------------------------------ */
     const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
 
+    /**  Injects the custom player markup & behaviour  */
     function injectPlayer(src){
       currentSrc = src;
       cont.style.background="#000";
@@ -155,6 +134,18 @@
       const prog   = cont.querySelector("#vProgress");
       const label  = cont.querySelector("#timeLabel");
 
+      /* ------------- QR helpers -------------- */
+      let qrVisible = false;                 // default HIDDEN in page mode
+      updateQR();
+
+      function updateQR(){
+        qrBox.style.display = qrVisible ? "block" : "none";
+        qrBt.textContent    = qrVisible ? "Hide QR" : "Show QR";
+      }
+
+      qrBt.onclick = () => { qrVisible = !qrVisible; updateQR(); };
+
+      /* -------- video plumbing --------------- */
       vid.src = "/"+src;
 
       vid.addEventListener("loadedmetadata",()=>{
@@ -163,7 +154,8 @@
       });
       vid.addEventListener("timeupdate",()=>{
         prog.value = vid.currentTime;
-        label.textContent = `${toHMS(vid.currentTime)} / ${toHMS(vid.duration)}`;
+        label.textContent =
+          `${toHMS(vid.currentTime)} / ${toHMS(vid.duration)}`;
       });
       prog.oninput = e => vid.currentTime = +e.target.value;
 
@@ -173,6 +165,7 @@
       vid.onplay  = ()=> playBt.textContent="⏸";
       vid.onpause = ()=> playBt.textContent="▶";
 
+      /* -------- fullscreen control ------------ */
       const reqFull = el => (el.requestFullscreen||el.webkitRequestFullscreen||
                              el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
       const exitFull= () => (document.exitFullscreen||document.webkitExitFullscreen||
@@ -183,16 +176,24 @@
       fsBt.onclick   = ()=> toggleFull(cont);
       vid.ondblclick = ()=> toggleFull(cont);
 
-      /* ---- QR toggle ---------- */
-      let qrVisible = true;
-      qrBt.onclick = ()=>{qrVisible=!qrVisible;qrBox.style.display=qrVisible?"block":"none"};
+      /*  On entering/exiting fullscreen: force default QR state  */
+      document.addEventListener("fullscreenchange", handleFSChange);
+      document.addEventListener("webkitfullscreenchange", handleFSChange);
+      document.addEventListener("mozfullscreenchange", handleFSChange);
+      document.addEventListener("MSFullscreenChange", handleFSChange);
+
+      function handleFSChange(){
+        const inFS =
+          (document.fullscreenElement||document.webkitFullscreenElement||
+           document.mozFullScreenElement||document.msFullscreenElement) === cont;
+        qrVisible = inFS;        // ON in fullscreen, OFF otherwise
+        updateQR();
+      }
 
       /* ---- Next song ---------- */
       nextBt.onclick = triggerNext;
       vid.onended    = triggerNext;
-      function triggerNext(){
-        doNextSong();                 // stay in fullscreen now
-      }
+      function triggerNext(){ doNextSong(); }  // stays in fullscreen now
     }
 
     /* ---------- server push ------------------------------- */
