@@ -83,7 +83,7 @@
 
   <!-- reusable widget markup -->
   <template id="playerTemplate">
-    <video id="videoPlayer" autoplay playsinline muted></video>
+    <video id="videoPlayer" autoplay playsinline></video>
 
     <div id="qrMark">
       <img src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}"
