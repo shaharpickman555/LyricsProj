@@ -21,7 +21,12 @@
     }
 
     /* -------- video ------------ */
-    #videoPlayer{width:100%;display:block}
+    #videoPlayer{
+      width:100%;
+      height:100%;          /* let it obey the parent's height */
+      object-fit:contain;   /* <‑‑ this line prevents cropping */
+      background:#000;      /* bars will be black rather than transparent */
+    }
 
     /* -------- fullscreen ------- */
     #player-container:fullscreen,
