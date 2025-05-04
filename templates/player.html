@@ -21,16 +21,14 @@
     }
 
     /* -------- video ------------ */
-    #videoPlayer{
-      width:100%;height:100%;object-fit:contain;background:#000
-    }
+    #videoPlayer{width:100%;height:100%;object-fit:contain;background:#000}
 
     /* -------- fullscreen ------- */
     #player-container:fullscreen,
     #player-container:-webkit-full-screen,
     #player-container:-moz-full-screen,
     #player-container:-ms-fullscreen{
-      background:#000!important;width:100%!important;height:100%!important;
+      background:#000!important;width:100%!important;height:100%!important
     }
     #player-container:fullscreen #videoPlayer,
     #player-container:-webkit-full-screen #videoPlayer,
@@ -51,9 +49,11 @@
       position:absolute;left:0;right:0;bottom:0;z-index:40;
       height:44px;display:flex;align-items:center;gap:.8rem;
       background:rgba(0,0,0,.78);color:#fff;padding:0 .8rem;
-      font-size:18px;user-select:none
+      font-size:18px;user-select:none;
+      transition:opacity .25s;
     }
-    .vjs-btn{cursor:pointer}
+    .vjs-bar.hideFS{opacity:0;pointer-events:none}
+    .vjs-btn{cursor:pointer;text-decoration:none;color:inherit}
     .vjs-btn:hover{color:#0d6efd}
 
     #vProgress{flex:1;height:4px;appearance:none;background:#555;border-radius:2px}
@@ -94,14 +94,16 @@
     </div>
 
     <div class="vjs-bar">
-      <span id="btnPlay" class="vjs-btn" title="Play / Pause">⏸</span>
+      <span id="btnPlay"  class="vjs-btn" title="Play / Pause">⏸</span>
 
       <input id="vProgress" type="range" min="0" value="0" step="0.1">
       <span id="timeLabel" style="width:115px;text-align:right">0:00&nbsp;/&nbsp;0:00</span>
 
       <div class="right-group">
+        <span id="btnVol"  class="vjs-btn" title="Volume">🔊</span>
         <span id="btnNext" class="vjs-btn" title="Next song">⏭</span>
-        <span id="btnQR"   class="vjs-btn" title="Show / hide QR">Show QR</span>
+        <a   id="btnDL"   class="vjs-btn" title="Download">⬇</a>
+        <span id="btnQR"   class="vjs-btn" title="Show / hide QR">Show&nbsp;QR</span>
         <span id="btnFS"   class="vjs-btn" title="Fullscreen">⤢</span>
       </div>
     </div>
@@ -133,21 +135,16 @@
       const qrBox  = cont.querySelector("#qrMark");
       const prog   = cont.querySelector("#vProgress");
       const label  = cont.querySelector("#timeLabel");
+      const volBt  = cont.querySelector("#btnVol");
+      const dlBt   = cont.querySelector("#btnDL");
+      const bar    = cont.querySelector(".vjs-bar");
 
-      /* ------------- QR helpers -------------- */
-      let qrVisible = false;                 // default HIDDEN in page mode
-      updateQR();
-
-      function updateQR(){
-        qrBox.style.display = qrVisible ? "block" : "none";
-        qrBt.textContent    = qrVisible ? "Hide QR" : "Show QR";
-      }
-
-      qrBt.onclick = () => { qrVisible = !qrVisible; updateQR(); };
-
-      /* -------- video plumbing --------------- */
+      /* -------- video src --------------- */
       vid.src = "/"+src;
+      dlBt.href = "/"+src;
+      dlBt.download = src.split('/').pop();
 
+      /* -------- timeline  --------------- */
       vid.addEventListener("loadedmetadata",()=>{
         prog.max = vid.duration;
         label.textContent = `0:00 / ${toHMS(vid.duration)}`;
@@ -159,13 +156,20 @@
       });
       prog.oninput = e => vid.currentTime = +e.target.value;
 
+      /* -------- play / pause ------------ */
       const togglePlay = ()=> vid.paused ? vid.play() : vid.pause();
       playBt.onclick = togglePlay;
       vid.onclick    = togglePlay;
       vid.onplay  = ()=> playBt.textContent="⏸";
       vid.onpause = ()=> playBt.textContent="▶";
 
-      /* -------- fullscreen control ------------ */
+      /* -------- volume (simple cycle) --- */
+      const levels=[1,0.66,0.33,0];const icons=["🔊","🔉","🔈","🔇"];let i=0;
+      applyVol();
+      volBt.onclick=()=>{i=(i+1)%levels.length;applyVol();};
+      function applyVol(){vid.volume=levels[i];vid.muted=(vid.volume===0);volBt.textContent=icons[i];}
+
+      /* -------- fullscreen control ------ */
       const reqFull = el => (el.requestFullscreen||el.webkitRequestFullscreen||
                              el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
       const exitFull= () => (document.exitFullscreen||document.webkitExitFullscreen||
@@ -176,24 +180,47 @@
       fsBt.onclick   = ()=> toggleFull(cont);
       vid.ondblclick = ()=> toggleFull(cont);
 
-      /*  On entering/exiting fullscreen: force default QR state  */
-      document.addEventListener("fullscreenchange", handleFSChange);
-      document.addEventListener("webkitfullscreenchange", handleFSChange);
-      document.addEventListener("mozfullscreenchange", handleFSChange);
-      document.addEventListener("MSFullscreenChange", handleFSChange);
+      /* -------- QR visibility ----------- */
+      let qrVisible=false;updateQR();
+      qrBt.onclick = ()=>{qrVisible=!qrVisible;updateQR();};
+      function updateQR(){qrBox.style.display=qrVisible?"block":"none";qrBt.textContent=qrVisible?"Hide QR":"Show QR";}
 
-      function handleFSChange(){
-        const inFS =
-          (document.fullscreenElement||document.webkitFullscreenElement||
-           document.mozFullScreenElement||document.msFullscreenElement) === cont;
-        qrVisible = inFS;        // ON in fullscreen, OFF otherwise
-        updateQR();
+      /* -------- toolbar auto‑hide ------- */
+      let hideTimer=null;
+      function isFS(){
+        return (document.fullscreenElement||document.webkitFullscreenElement||
+                document.mozFullScreenElement||document.msFullscreenElement) === cont;
       }
+      function showBar(){
+        bar.classList.remove("hideFS");
+        if(isFS()){resetHide();}
+      }
+      function hideBar(){bar.classList.add("hideFS");}
+      function resetHide(){
+        clearTimeout(hideTimer);
+        hideTimer=setTimeout(()=>{ if(isFS()) hideBar(); },3000);
+      }
+      // User activity listeners
+      document.addEventListener("mousemove",showBar);
+      document.addEventListener("keydown",showBar);
+
+      // FS state changes
+      function handleFSChange(){
+        const inFS=isFS();
+        qrVisible=inFS; updateQR();
+        bar.classList.remove("hideFS");
+        clearTimeout(hideTimer);
+        if(inFS) resetHide();
+      }
+      document.addEventListener("fullscreenchange",handleFSChange);
+      document.addEventListener("webkitfullscreenchange",handleFSChange);
+      document.addEventListener("mozfullscreenchange",handleFSChange);
+      document.addEventListener("MSFullscreenChange",handleFSChange);
 
       /* ---- Next song ---------- */
       nextBt.onclick = triggerNext;
       vid.onended    = triggerNext;
-      function triggerNext(){ doNextSong(); }  // stays in fullscreen now
+      function triggerNext(){ doNextSong(); }
     }
 
     /* ---------- server push ------------------------------- */
