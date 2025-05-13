@@ -286,7 +286,7 @@ def segment(result):
     word_durations = [word.end - word.start for segment in result for word in segment]
     words_per_spoken_second = len(word_durations) / sum(word_durations)
 
-    max_characters_per_line = 30
+    max_characters_per_line = 20
     max_lines = max(2, int(words_per_spoken_second - 1))
 
     #merge all?
@@ -361,7 +361,7 @@ def output_line(words, selected_word):
 
     wrapped = [text_wrap.format(text=output_word(w.word), color=marked_color if w == selected_word else unmarked_colors[i % 2]) for i, w in enumerate(words)]
 
-    return ' '.join(reversed(wrapped) if direction == 'rtl' else wrapped)
+    return r'{\q2}' + ' '.join(reversed(wrapped) if direction == 'rtl' else wrapped)
 
 def ass_circle(start_layer, x, y, start_time, end_time, fadein_time):
     mid_time = (end_time + start_time) / 2
@@ -520,7 +520,7 @@ def audio_with_blank(audiopath, outputpath, subtitles_path=None):
     run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', '-fflags', '+shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
 
 def video_with_audio(videopath, audiopath, outputpath, subtitles_path=None):
-    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-fflags', '+shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-fflags', '+shortest', '-filter_complex', f"[0:v]scale='max(720, iw)':-2[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]" if subtitles_path else "scale='max(720, iw)':-2[v]", '-map', '[v]:v', '-map', '1:a', '-vcodec', 'h264', outputpath)
 
 def try_remove(path):
     try:
