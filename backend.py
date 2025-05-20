@@ -520,7 +520,7 @@ def audio_with_blank(audiopath, outputpath, subtitles_path=None):
     run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', '-fflags', '+shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
 
 def video_with_audio(videopath, audiopath, outputpath, subtitles_path=None):
-    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-fflags', '+shortest', '-filter_complex', f"[0:v]scale='max(720, iw)':-2[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]" if subtitles_path else "scale='max(720, iw)':-2[v]", '-map', '[v]:v', '-map', '1:a', '-vcodec', 'h264', outputpath)
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-fflags', '+shortest', '-filter_complex', f"[0:v]scale='max(720, iw)':-2[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]" if subtitles_path else "scale='max(720, iw)':-2[v]", '-map', '[v]:v', '-map', '1:a', '-vcodec', 'h264', '-crf', '20', outputpath)
 
 def try_remove(path):
     try:
