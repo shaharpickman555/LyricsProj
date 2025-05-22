@@ -607,7 +607,7 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
         if blank_video:
             audio_with_blank(instpath, output_path)
         else:
-            video_with_audio(mp4_input, instpath)
+            video_with_audio(mp4_input, instpath, output_path)
     finally:
         if remove_intermediates:
             try_remove(instpath)
