@@ -1,9 +1,10 @@
-FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
+FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-devel
 USER root
 WORKDIR /app
 
 ENV TORCH_HOME=/data/models
 ENV TZ=Asia/Jerusalem
+ENV NVIDIA_DRIVER_CAPABILITIES=all
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt update && apt install -y software-properties-common
