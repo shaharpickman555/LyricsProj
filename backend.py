@@ -265,7 +265,7 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
     ydl_opts = {
         'outtmpl': os.path.join(local_dir, f'%(id)s.{ext}'),
         'nooverwrites': False,
-        'final_ext': ext,
+        'merge_output_format': ext,
     }
     
     if audio_only:
