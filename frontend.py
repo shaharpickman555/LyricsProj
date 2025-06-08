@@ -8,7 +8,7 @@ from typing import List
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize
+from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize, die
 import qrcode
 from io import BytesIO
 from flask import send_file
@@ -273,7 +273,7 @@ def reboot():
     time.sleep(0.2 + random.uniform(0.0, 0.3)) #brute
     pw = request.form.get('pw')
     if pw == open(REBOOT_PW_PATH, 'r').read().strip():
-        backend.die()
+        die()
         
     return make_response('''<!doctype html>
     <html>
