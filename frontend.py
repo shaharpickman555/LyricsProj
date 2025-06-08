@@ -1,6 +1,6 @@
 import subprocess
 import os, sys, argparse, logging
-import random, string
+import random, string, time
 import re
 import traceback
 import platform
@@ -24,6 +24,8 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = max_job_filesize
 socketio = SocketIO(app)
 rooms = {}
+
+REBOOT_PW_PATH = 'reboot_pw.txt'
 
 VALID_ROOM_REGEX = re.compile(r'^[A-Za-z0-9_-]+$')
 
@@ -265,6 +267,29 @@ def qr_inv():
     img.save(buf, format="PNG")
     buf.seek(0)
     return send_file(buf, mimetype="image/png")
+    
+@app.route('/reboot', methods=['GET', 'POST'])
+def reboot():
+    time.sleep(0.2 + random.uniform(0.0, 0.3)) #brute
+    pw = request.form.get('pw')
+    if pw == open(REBOOT_PW_PATH, 'r').read().strip():
+        import signal
+        os.kill(os.getpid(), signal.SIGINT)
+        sys.exit(0)
+        
+    return make_response('''<!doctype html>
+    <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        </head>
+        <body>
+            <h4>Request Reboot</h4>
+            <form action="" method="post">
+                <input type="text" name="pw" />
+                <input type="submit" value="request" />
+            </form>
+        </body>
+    </html>''')
 
 @socketio.on("connect")
 def on_connect():
