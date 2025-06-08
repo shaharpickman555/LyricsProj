@@ -1,15 +1,17 @@
-import time, itertools, pprint, subprocess, sys, math, os, collections, re, hashlib, base64, shutil, threading, ctypes, traceback, inspect, stat, logging
+import time, itertools, pprint, subprocess, sys
+import math, os, collections, re, hashlib, base64
+import shutil, threading, ctypes, traceback, inspect
+import stat, logging, signal, argparse, gc, datetime
 from dataclasses import dataclass
-import unicodedata
+from collections import namedtuple
 from pathlib import Path
-import argparse
+
+import requests
+import unicodedata
 import torch
 import demucs.api
 import yt_dlp
-from collections import namedtuple
 import torch
-import gc
-
 import whisperx
 import faster_whisper
 
@@ -78,6 +80,8 @@ alignment_model_override = {
 def set_debug(debug):
     if not debug and not has_juice:
         raise RuntimeError('No GPU on release')
+    if debug:
+        logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 whisper_models = None
 whisper_model_framework = None
@@ -770,6 +774,38 @@ job_queue = None
 job_status_cb = None
 current_job = None
 
+YTD_CHECK_INTERVAL = 3600 #once per hour
+ytd_last_check = datetime.datetime.now()
+
+def die():
+    os.kill(os.getpid(), signal.SIGINT)
+    sys.exit(0)
+    
+def youtube_downloader_check():
+    global ytd_last_check
+    
+    try:
+        available_version_data = requests.get('https://github.com/yt-dlp/yt-dlp/raw/refs/heads/master/yt_dlp/version.py').text
+        lc = {}
+        exec(available_version_data, None, lc)
+        
+        available_version = lc['__version__']
+        current_version = yt_dlp.version.__version__
+   
+        logger.info(f'Checking ytd version: {current_version} vs {available_version}')
+        
+        if current_version != available_version:
+            die()
+            
+    except Exception as e:
+        logger.info(f"Couldn't complete version check: {e}")
+    
+    ytd_last_check = datetime.datetime.now()
+    
+def youtube_downloader_next_check():
+    global ytd_last_check
+    return max(0, ((ytd_last_check + datetime.timedelta(seconds=YTD_CHECK_INTERVAL)) - datetime.datetime.now()).total_seconds())
+
 def work_loop():
     global should_stop, job_queue, lock, event, job_status_cb, current_job
     
@@ -799,7 +835,11 @@ def work_loop():
                     job.update_status_locked('processing')
             
             if job is None:
-                event.wait()
+                next_ytd_check = youtube_downloader_next_check()
+                if next_ytd_check < 1:
+                    youtube_downloader_check()
+                    
+                event.wait(timeout=next_ytd_check)
                 continue
                 
             try:

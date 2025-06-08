@@ -273,9 +273,7 @@ def reboot():
     time.sleep(0.2 + random.uniform(0.0, 0.3)) #brute
     pw = request.form.get('pw')
     if pw == open(REBOOT_PW_PATH, 'r').read().strip():
-        import signal
-        os.kill(os.getpid(), signal.SIGINT)
-        sys.exit(0)
+        backend.die()
         
     return make_response('''<!doctype html>
     <html>
