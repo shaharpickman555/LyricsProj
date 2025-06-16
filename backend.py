@@ -271,6 +271,7 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
         'nooverwrites': False,
         'format': 'bv*[height<2000]+ba/b[height<2000]',
         'merge_output_format': ext,
+        'force_noplaylist': True,
     }
     
     if audio_only:

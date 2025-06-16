@@ -1,17 +1,16 @@
 import subprocess
 import os, sys, argparse, logging
-import random, string, time
-import re
-import traceback
-import platform
-from typing import List
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response
-from werkzeug.utils import secure_filename
-from flask_socketio import SocketIO, emit, join_room, leave_room
-from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize, die
-import qrcode
+import random, string, time, pprint
+import re, traceback
 from io import BytesIO
-from flask import send_file
+
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response, send_file
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.utils import secure_filename
+import qrcode
+import yt_dlp
+
+from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize, die
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -288,6 +287,45 @@ def reboot():
             </form>
         </body>
     </html>''')
+    
+@app.route('/search/yt/<int:many>', methods=['GET'])
+def search_yt(many):
+    if many > 5:
+        many = 5
+    if many < 1:
+        many = 1
+        
+    q = request.args.get('q')
+    if not q:
+        return make_response('', 400)
+    
+    ydl_opts = {
+        'default_search': f'ytsearch{many}',
+        'skip_download': True,
+        'force_noplaylist': True,
+        'extract_flat': 'in_playlist',
+    }
+    
+    forbidden = ':'
+    for f in forbidden:
+        q = q.replace(f, ' ')
+    
+    results = []
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        #TODO sanitize
+        info = ydl.extract_info(q)
+        
+        for entry in info['entries']:
+            #TODO timestamp is None unless we remove 'extract_flat' which slows everything
+            results.append(dict(url=entry['url'], 
+                                  title=entry['title'],
+                                  uploader=entry['uploader'],
+                                  views=entry['view_count'],
+                                  duration=entry['duration'],
+                                  thumbnail=min(entry['thumbnails'], key=lambda t: t['height'])['url']))
+        
+    return jsonify(results), 200
 
 @socketio.on("connect")
 def on_connect():
