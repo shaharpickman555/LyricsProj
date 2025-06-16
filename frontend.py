@@ -294,7 +294,7 @@ def search_yt(many):
         many = 5
     if many < 1:
         many = 1
-        
+
     q = request.args.get('q')
     if not q:
         return make_response('', 400)
@@ -315,7 +315,7 @@ def search_yt(many):
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(q)
-        
+
         for entry in info['entries']:
             #TODO timestamp is None unless we remove 'extract_flat' which slows everything
             results.append(dict(url=entry['url'], 

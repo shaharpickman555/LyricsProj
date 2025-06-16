@@ -256,8 +256,14 @@ def replace_ext(path, ext):
     return f'{path[:path.rfind(".")]}{ext}'
     
 def youtube_info(url):
-    with yt_dlp.YoutubeDL() as ydl:
-        info = ydl.extract_info(url, download=False)
+    yt_opts = {
+        'skip_download': True,
+        'force_noplaylist': True,
+        'extract_flat': 'in_playlist',
+    }
+    
+    with yt_dlp.YoutubeDL(yt_opts) as ydl:
+        info = ydl.extract_info(url)
         
     return info['id'], info['title'], dict(duration=info['duration'])
 
