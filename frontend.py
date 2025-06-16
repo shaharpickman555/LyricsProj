@@ -306,6 +306,7 @@ def search_yt(many):
         'extract_flat': 'in_playlist',
     }
     
+    #sanitize
     forbidden = ':'
     for f in forbidden:
         q = q.replace(f, ' ')
@@ -313,7 +314,6 @@ def search_yt(many):
     results = []
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        #TODO sanitize
         info = ydl.extract_info(q)
         
         for entry in info['entries']:
