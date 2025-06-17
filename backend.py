@@ -265,7 +265,8 @@ def youtube_info(url):
     with yt_dlp.YoutubeDL(yt_opts) as ydl:
         info = ydl.extract_info(url)
         
-    return info['id'], info['title'], dict(duration=info['duration'])
+    return info['id'], info['title'], dict(duration=info['duration'],
+                                           thumbnail=min(info['thumbnails'], key=lambda t: t['height'])['url'])
 
 def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress_cb=None):
     if progress_cb:

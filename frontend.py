@@ -290,8 +290,8 @@ def reboot():
     
 @app.route('/search/yt/<int:many>', methods=['GET'])
 def search_yt(many):
-    if many > 5:
-        many = 5
+    if many > 6:
+        many = 6
     if many < 1:
         many = 1
 
