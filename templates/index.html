@@ -5,73 +5,27 @@
   <title>Karaoke Playlist</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="/static/favicon.png">
-  <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-
-  <!-- jQuery, Socket.IO, Sortable, Bootstrap JS Bundle -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f8f9fa;
-      padding: 20px;
-    }
-    .playlist-container {
-      max-width: 650px;
-      margin: auto;
-    }
-    .playing-song {
-      font-weight: bold;
-      color: #007bff;
-    }
-    .remove-btn, .restore-btn {
-      background: none;
-      border: none;
-      font-size: 18px;
-      cursor: pointer;
-    }
-    .remove-btn { color: #dc3545; }
-    .restore-btn { color: #6c757d; }
-    .drag-handle {
-      cursor: grab;
-      margin-right: 10px;
-    }
-    .status {
-      width: 45px;
-      text-align: center;
-      margin-left: 10px;
-    }
-    .progress {
-      margin-top: 6px;
-      flex: 1;
-      min-width: 80px;
-    }
+    body { font-family: Arial, sans-serif; background-color: #f8f9fa; padding: 20px; }
+    .playlist-container { max-width: 650px; margin: auto; }
+    .playing-song { font-weight: bold; color: #007bff; }
+    .remove-btn, .restore-btn { background: none; border: none; font-size: 18px; cursor: pointer; }
+    .remove-btn { color: #dc3545; } .restore-btn { color: #6c757d; }
+    .drag-handle { cursor: grab; margin-right: 10px; }
+    .status { width: 45px; text-align: center; margin-left: 10px; }
+    .progress { margin-top: 6px; flex: 1; min-width: 80px; }
     .progress-bar { min-width: 45px; }
     .progress-bar.text-dark { color: #000 !important; }
     #previousPlaylist li { color: #6c757d; }
-    #advancedSection {
-      margin-top: 1rem;
-      padding: 1rem;
-      background-color: #f2f2f2;
-      border-radius: 4px;
-      display: none;
-    }
-    .modal-body a {
-      word-wrap: break-word;
-      overflow-wrap: anywhere;
-      display: inline-block;
-      max-width: 100%;
-    }
-    .youtube-result-card.card {
-      transition: transform 0.2s;
-    }
-    .youtube-result-card.selected {
-      border: 2px solid #28a745;
-    }
+    #advancedSection { margin-top: 1rem; padding: 1rem; background-color: #f2f9fa; border-radius: 4px; display: none; }
+    .modal-body a { word-wrap: break-word; overflow-wrap: anywhere; display: inline-block; max-width: 100%; }
+    .youtube-result-card.card { transition: transform 0.2s; }
+    .youtube-result-card.selected { border: 2px solid #28a745; }
   </style>
 </head>
 <body>
@@ -79,30 +33,24 @@
   {% if messages %}
     <div class="container mt-3">
       {% for category, message in messages %}
-        <div class="alert alert-{{ category }}" role="alert">
-          {{ message }}
-        </div>
+        <div class="alert alert-{{ category }}" role="alert">{{ message }}</div>
       {% endfor %}
     </div>
   {% endif %}
 {% endwith %}
 
 <div class="container">
-  <!-- Dynamic heading -->
   <h1 id="pageTitle" class="text-center" style="margin:13px; line-height:1.1; font-size:52px;"></h1>
 
-  <!-- Name input: smaller, left-aligned, labeled "Name:" -->
-  <div class="d-flex justify-content-start align-items-center mb-3" style="gap: 0.25rem;">
+  <div class="d-flex justify-content-start align-items-center mb-3" style="gap:0.25rem;">
     <label for="nicknameInput" class="fw-bold mb-0">Name:</label>
-    <input type="text" id="nicknameInput" class="form-control" style="max-width: 100px; font-size:0.8rem; padding:0.2rem;" placeholder="Name">
-    <button type="button" id="saveNameBtn" class="btn btn-sm btn-primary" style="font-size:0.7rem; padding:0.2rem 0.5rem;">Save</button>
+    <input type="text" id="nicknameInput" class="form-control" style="max-width:100px;font-size:0.8rem;padding:0.2rem;" placeholder="Name">
+    <button type="button" id="saveNameBtn" class="btn btn-sm btn-primary" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Save</button>
   </div>
 
-  <!-- Add Song Form -->
   <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow">
     <input type="hidden" name="uploader" id="uploaderField" value="">
 
-    <!-- Source selection -->
     <div class="mb-3">
       <label class="form-check-label me-3">
         <input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube
@@ -112,25 +60,21 @@
       </label>
     </div>
 
-    <!-- YouTube input group -->
     <div id="youtubeInputGroup" class="input-group mb-3 w-100">
       <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg" placeholder="Search YouTube or paste URL...">
       <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button>
     </div>
 
-    <!-- Local file chooser -->
     <div id="localFileGroup" class="mb-3 d-none">
-      <input type="file" name="local_file" id="local_file" accept="video/*, audio/*" class="form-control">
+      <input type="file" name="local_file" id="local_file" accept="video/*,audio/*" class="form-control">
     </div>
 
-    <!-- Processing options -->
     <div class="mt-3">
       <label class="form-check-label me-3"><input type="radio" name="keep" value="nothing" checked> Full Karaoke</label>
       <label class="form-check-label me-3"><input type="radio" name="keep" value="video"> Remove Vocals</label>
       <label class="form-check-label"><input type="radio" name="keep" value="all"> Keep Video</label>
     </div>
 
-    <!-- Advanced toggle -->
     <button type="button" id="toggleAdvancedBtn" class="btn btn-outline-secondary mt-3">Advanced ▼</button>
     <div id="advancedSection">
       <div class="form-check mb-3">
@@ -145,26 +89,24 @@
         <label for="lang_hint" class="form-label">Language Hint</label>
         <select class="form-select" id="lang_hint" name="lang_hint">
           <option value="" selected>None</option>
-          {% for k,v in languages.items() %}
-          <option value="{{k}}">{{v}}</option>
-          {% endfor %}
+          {% for k,v in languages.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}
         </select>
       </div>
     </div>
 
-    <button type="submit" class="btn btn-primary w-100 mt-3">Add Song</button>
+    <span id="addSongWrapper" class="d-block" data-bs-toggle="tooltip" title="A valid YouTube URL is needed to add a song">
+      <button id="addSongBtn" type="submit" class="btn btn-primary w-100 mt-3" disabled>
+        Add Song
+      </button>
+    </span>
   </form>
 
   <hr>
 
-  <!-- Playlist & Controls -->
   <div class="playlist-container">
-    <!-- Open Player always visible at top -->
     <div class="d-flex justify-content-center mb-3">
       <a href="/player/{{ room_id }}" target="_blank" class="btn btn-secondary w-25">Open Player</a>
     </div>
-
-    <!-- Playlist section toggles on content -->
     <div id="playlistSection" style="display:none;">
       <h2 class="text-center">Playlist</h2>
       <ul id="playlist" class="list-group"></ul>
@@ -178,7 +120,6 @@
   </div>
 </div>
 
-<!-- Song Info Modal -->
 <div class="modal fade" id="songInfoModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
     <div class="modal-header">
@@ -191,13 +132,10 @@
       <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
       <p><strong>Uploader:</strong> <span id="uploaderText"></span></p>
     </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
   </div></div>
 </div>
 
-<!-- YouTube Search Results Modal -->
 <div class="modal fade" id="ytSearchModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
     <div class="modal-header">
@@ -208,90 +146,85 @@
       <div id="ytResultsContainer" class="row gy-3"></div>
       <div id="ytMoreContainer" class="text-center mt-3"></div>
     </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
   </div></div>
 </div>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const socket = io();
-  const roomId = "{{ room_id }}";
-
-  // Name logic
+  const socket = io(), roomId = "{{ room_id }}";
   const pageTitle = document.getElementById("pageTitle");
   const nicknameInput = document.getElementById("nicknameInput");
   const saveNameBtn = document.getElementById("saveNameBtn");
   const uploaderField = document.getElementById("uploaderField");
+  const addSongForm = document.getElementById("addSongForm");
+  const addSongBtn = document.getElementById("addSongBtn");
+  const addSongWrapper = document.getElementById("addSongWrapper");
+  const sourceYoutube = document.getElementById("sourceYoutube");
+  const sourceLocal   = document.getElementById("sourceLocal");
+  const ytInput       = document.getElementById("youtube_url");
+  const ytSearchBtn   = document.getElementById("youtubeSearchBtn");
+  const ytModal       = new bootstrap.Modal(document.getElementById("ytSearchModal"));
+  const ytResultsContainer = document.getElementById("ytResultsContainer");
+  const ytMoreContainer    = document.getElementById("ytMoreContainer");
+  let allResults = [];
+
+  // Initialize tooltip
+  const tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper);
+
+  // Nickname init
   let storedName = localStorage.getItem("karaokeNickname");
   if (!storedName || !storedName.trim()) storedName = generateCoolNickname();
   nicknameInput.value = storedName;
   updatePageTitle(storedName);
 
   saveNameBtn.addEventListener("click", () => {
-    const newName = nicknameInput.value.trim();
-    if (!newName) {
-      const gen = generateCoolNickname();
-      nicknameInput.value = gen;
-      localStorage.setItem("karaokeNickname", gen);
-      updatePageTitle(gen);
+    let newName = nicknameInput.value.trim();
+    if (!newName) newName = generateCoolNickname();
+    localStorage.setItem("karaokeNickname", newName);
+    nicknameInput.value = newName;
+    updatePageTitle(newName);
+  });
+
+  // Enable/disable Add Song & tooltip
+  function updateAddBtnState() {
+    if (sourceLocal.checked) {
+      addSongBtn.disabled = false;
+      addSongWrapper.removeAttribute("data-bs-original-title");
+      addSongWrapper.removeAttribute("title");
+      tooltip.disable();
     } else {
-      localStorage.setItem("karaokeNickname", newName);
-      updatePageTitle(newName);
-    }
-  });
-
-  // YouTube search elements
-  const ytSearchBtn = document.getElementById("youtubeSearchBtn");
-  const ytModal = new bootstrap.Modal(document.getElementById("ytSearchModal"));
-  const ytResultsContainer = document.getElementById("ytResultsContainer");
-  const ytMoreContainer = document.getElementById("ytMoreContainer");
-  const ytInput = document.getElementById("youtube_url");
-  let allResults = [];
-
-  ytSearchBtn.addEventListener("click", performYtSearch);
-  ytInput.addEventListener("keypress", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      performYtSearch();
-    }
-  });
-
-  // Add Song form submission with URL validation
-  const addSongForm = document.getElementById("addSongForm");
-  const sourceYoutube = document.getElementById("sourceYoutube");
-  const sourceLocal = document.getElementById("sourceLocal");
-  addSongForm.addEventListener("submit", e => {
-    e.preventDefault();
-    if (sourceYoutube.checked) {
-      const url = ytInput.value.trim();
-      const ytUrlPattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/).+/;
-      if (!ytUrlPattern.test(url)) {
-        alert("You must supply a valid YouTube URL.\nUse the search for finding your song");
-        return;
+      const v = ytInput.value.trim();
+      if (/^https?:\/\//.test(v)) {
+        addSongBtn.disabled = false;
+        addSongWrapper.removeAttribute("data-bs-original-title");
+        addSongWrapper.removeAttribute("title");
+        tooltip.disable();
+      } else {
+        addSongBtn.disabled = true;
+        addSongWrapper.setAttribute("data-bs-original-title", "A valid YouTube URL is needed to add a song");
+        tooltip.enable();
       }
-      // Attempt to connect
-      fetch(url, { mode: 'no-cors' })
-        .then(() => {
-          const curr = nicknameInput.value.trim() || generateCoolNickname();
-          uploaderField.value = curr;
-          localStorage.setItem("karaokeNickname", curr);
-          updatePageTitle(curr);
-          addSongForm.submit();
-        })
-        .catch(() => {
-          alert("Cannot connect to the URL. Please supply a valid YouTube URL.");
-        });
-    } else {
-      // Local file
-      const curr = nicknameInput.value.trim() || generateCoolNickname();
-      uploaderField.value = curr;
-      localStorage.setItem("karaokeNickname", curr);
-      updatePageTitle(curr);
-      addSongForm.submit();
     }
-  });
+  }
+  ytInput.addEventListener("input", updateAddBtnState);
+  sourceYoutube.addEventListener("change", updateAddBtnState);
+  sourceLocal.addEventListener("change", updateAddBtnState);
+  updateAddBtnState();
+
+  // Source toggle
+  function toggleSource() {
+    if (sourceYoutube.checked) {
+      document.getElementById("youtubeInputGroup").classList.remove("d-none");
+      document.getElementById("localFileGroup").classList.add("d-none");
+    } else {
+      document.getElementById("youtubeInputGroup").classList.add("d-none");
+      document.getElementById("localFileGroup").classList.remove("d-none");
+    }
+  }
+  sourceYoutube.addEventListener("change", toggleSource);
+  sourceLocal.addEventListener("change", toggleSource);
+  toggleSource();
 
   // Advanced toggle
   const adv = document.getElementById("advancedSection");
@@ -307,47 +240,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Source toggle
-  const youtubeInputGroup = document.getElementById("youtubeInputGroup");
-  const localFileGroup = document.getElementById("localFileGroup");
-  function toggleSource() {
-    if (sourceYoutube.checked) {
-      youtubeInputGroup.classList.remove("d-none");
-      localFileGroup.classList.add("d-none");
-    } else {
-      youtubeInputGroup.classList.add("d-none");
-      localFileGroup.classList.remove("d-none");
-    }
-  }
-  sourceYoutube.addEventListener("change", toggleSource);
-  sourceLocal.addEventListener("change", toggleSource);
-  toggleSource();
+  addSongForm.addEventListener("submit", e => {
+    e.preventDefault();
+    addSongForm.submit();
+  });
 
-  // YouTube search logic
+  // YouTube search
+  ytSearchBtn.addEventListener("click", performYtSearch);
+  ytInput.addEventListener("keypress", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      performYtSearch();
+    }
+  });
+
   function performYtSearch() {
-    const query = ytInput.value.trim();
-    const ytUrlPattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/).+/;
-    if (ytUrlPattern.test(query)) {
-      alert("This is a valid YouTube URL. Click 'Add Song' to add it.");
+    const q = ytInput.value.trim();
+    const urlPat = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/).+/;
+    if (urlPat.test(q)) {
+      alert("This is a valid YouTube URL. Click 'Add Song'.");
       return;
     }
-    if (!query) {
-      alert("Please enter a search term or YouTube URL.");
+    if (!q) {
+      alert("Enter search term or URL.");
       return;
     }
-    fetch(`/search/yt/6?q=${encodeURIComponent(query)}`)
-      .then(res => {
-        if (!res.ok) throw new Error("Search failed");
-        return res.json();
-      })
-      .then(results => {
-        allResults = results;
-        displayYtResults(3);
-      })
-      .catch(err => {
-        console.error(err);
-        alert("Error fetching YouTube search results.");
-      });
+    fetch(`/search/yt/6?q=${encodeURIComponent(q)}`)
+      .then(r => { if (!r.ok) throw ""; return r.json(); })
+      .then(res => { allResults = res; displayYtResults(3); })
+      .catch(() => alert("Error fetching YouTube results."));
   }
 
   function displayYtResults(count) {
@@ -356,26 +277,23 @@ document.addEventListener("DOMContentLoaded", () => {
     allResults.slice(0, count).forEach(item => {
       const col = document.createElement("div");
       col.className = "col-md-6 col-lg-4";
-      col.innerHTML = `
-        <div class="card h-100 youtube-result-card" style="cursor:pointer;">
-          <img src="${item.thumbnail}" class="card-img-top" alt="Thumbnail">
-          <div class="card-body">
-            <h6 class="card-title">${item.title}</h6>
-            <p class="card-text text-truncate">${item.uploader}</p>
-            <p class="card-text">${formatDuration(item.duration)} • ${formatViews(item.views)}</p>
-          </div>
-        </div>
-      `;
-      const card = col.querySelector(".youtube-result-card");
-      card.addEventListener("click", () => {
-        document.querySelectorAll(".youtube-result-card.selected")
-          .forEach(c => c.classList.remove("selected"));
-        card.classList.add("selected");
-        ytInput.value = `${item.url}`;
+      col.innerHTML = `<div class="card h-100 youtube-result-card" style="cursor:pointer;">
+        <img src="${item.thumbnail}" class="card-img-top">
+        <div class="card-body">
+          <h6 class="card-title">${item.title}</h6>
+          <p class="card-text text-truncate">${item.uploader}</p>
+          <p class="card-text">${formatDuration(item.duration)} • ${formatViews(item.views)}</p>
+        </div></div>`;
+      const c = col.querySelector(".youtube-result-card");
+      c.addEventListener("click", () => {
+        document.querySelectorAll(".youtube-result-card.selected").forEach(x => x.classList.remove("selected"));
+        c.classList.add("selected");
+        ytInput.value = /^https?:\/\//.test(item.url) ? item.url : `https://www.youtube.com/watch?v=${item.url}`;
+        updateAddBtnState();
         setTimeout(() => ytModal.hide(), 200);
       });
-      card.addEventListener("mouseover", () => card.style.transform = "scale(1.02)");
-      card.addEventListener("mouseout", () => card.style.transform = "scale(1)");
+      c.addEventListener("mouseover", () => c.style.transform = "scale(1.02)");
+      c.addEventListener("mouseout", () => c.style.transform = "scale(1)");
       ytResultsContainer.appendChild(col);
     });
     if (count < allResults.length) {
@@ -388,186 +306,128 @@ document.addEventListener("DOMContentLoaded", () => {
     ytModal.show();
   }
 
-  function formatDuration(sec) {
-    const total = parseInt(sec, 10);
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  }
-
-  function formatViews(num) {
-    if (num >= 1_000_000) {
-      return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M views";
-    }
-    if (num >= 1_000) {
-      return (num / 1_000).toFixed(1).replace(/\.0$/, "") + "K views";
-    }
-    return num + " views";
-  }
-
-  // Playlist & visibility logic
-  function togglePlaylistSection(count) {
-    document.getElementById("playlistSection").style.display = count > 0 ? "block" : "none";
-  }
-
   socket.on("connect", () => socket.emit("join_room", { room_id: roomId }));
   socket.on("playlist_updated", data => {
     renderPlaylist(data.playlist);
     renderPrevious(data.previous_songs);
-    togglePlaylistSection(data.playlist.length);
+    document.getElementById("playlistSection").style.display =
+      data.playlist.length > 0 ? "block" : "none";
   });
-  togglePlaylistSection(0);
+  document.getElementById("playlistSection").style.display = "none";
 
-  function renderPlaylist(playlist) {
-    const el = document.getElementById("playlist");
-    el.innerHTML = "";
-    playlist.forEach((job, index) => {
-      const li = document.createElement("li");
-      li.dataset.index = index;
+  function renderPlaylist(pl) {
+    const el = document.getElementById("playlist"); el.innerHTML = "";
+    pl.forEach((job, i) => {
+      const li = document.createElement("li"); li.dataset.index = i;
       li.className = "list-group-item d-flex justify-content-between align-items-center";
       if (job.is_playing) li.classList.add("playing-song");
-      let html = `
-        <span class="drag-handle">☰</span>
-        <div class="flex-grow-1 text-start">
-          <span class="title">${job.is_playing ? "🎵 " : ""}${job.title}</span>
-          <span class="status">${getStatusIcon(job.status)}</span>
-      `;
-      if (job.status === "processing") {
-        const pct = Math.round((job.progress || 0) * 100);
-        html += `
-
-          <div class="progress mt-2">
-            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark"
-                 role="progressbar"
-                 style="width: ${pct}%"
-                 aria-valuenow="${pct}"
-                 aria-valuemin="0"
-                 aria-valuemax="100">${pct}%</div>
-          </div>
-        `;
+      let html = `<span class="drag-handle">☰</span><div class="flex-grow-1 text-start">
+        <span class="title">${job.is_playing?"🎵 ":""}${job.title}</span>
+        <span class="status">${getStatusIcon(job.status)}</span>`;
+      if (job.status==="processing") {
+        const pct = Math.round((job.progress||0)*100);
+        html += `<div class="progress mt-2">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark"
+               role="progressbar" style="width:${pct}%"
+               aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">${pct}%</div>
+        </div>`;
       }
       html += `</div>`;
-      const hasUrl = job.url && job.url.trim() !== "";
-      const hasDur = job.info && job.info.duration;
-      const hasUp = job.info && job.info.uploader;
-      if (hasUrl || hasDur || hasUp) {
-        const safe = job.title.replace(/"/g, "&quot;");
-        html += `
-          <button type="button" class="btn btn-sm btn-info me-2 info-btn"
+      const hasUrl=job.url?.trim(), hasDur=job.info?.duration, hasUp=job.info?.uploader;
+      if (hasUrl||hasDur||hasUp) {
+        const safe=job.title.replace(/"/g,"&quot;");
+        html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
                   data-title="${safe}"
-                  data-url="${hasUrl ? job.url : ""}"
-                  data-duration="${hasDur ? job.info.duration : "N/A"}"
-                  data-uploader="${hasUp ? job.info.uploader : "Unknown"}">?</button>
-        `;
+                  data-url="${hasUrl?job.url:""}"
+                  data-duration="${hasDur?job.info.duration:"N/A"}"
+                  data-uploader="${hasUp?job.info.uploader:"Unknown"}">?</button>`;
       }
-      if (!job.is_playing) {
-        html += `<button class="remove-btn btn btn-sm" data-index="${index}">❌</button>`;
-      }
-      li.innerHTML = html;
-      el.appendChild(li);
+      if (!job.is_playing) html += `<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
+      li.innerHTML = html; el.appendChild(li);
     });
   }
 
-  function renderPrevious(previous) {
-    const el = document.getElementById("previousPlaylist");
-    el.innerHTML = "";
-    previous.forEach((job, index) => {
-      const li = document.createElement("li");
-      li.dataset.index = index;
+  function renderPrevious(prev) {
+    const el = document.getElementById("previousPlaylist"); el.innerHTML = "";
+    prev.forEach((job,i) => {
+      const li = document.createElement("li"); li.dataset.index = i;
       li.className = "list-group-item d-flex justify-content-between align-items-center";
       let html = `<div class="flex-grow-1 text-start">${job.title}</div>`;
-      const hasUrl = job.url && job.url.trim() !== "";
-      const hasDur = job.info && job.info.duration;
-      const hasUp = job.info && job.info.uploader;
-      if (hasUrl || hasDur || hasUp) {
-        const safe = job.title.replace(/"/g, "&quot;");
-        html += `
-          <button type="button" class="btn btn-sm btn-info me-2 info-btn"
-                  data-title="${safe}"
-                  data-url="${hasUrl ? job.url : ""}"
-                  data-duration="${hasDur ? job.info.duration : "N/A"}"
-                  data-uploader="${hasUp ? job.info.uploader : "Unknown"}">?</button>
-        `;
+      const hasUrl=job.url?.trim(), hasDur=job.info?.duration, hasUp=job.info?.uploader;
+      if (hasUrl||hasDur||hasUp) {
+        const safe=job.title.replace(/"/g,"&quot;");
+        html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
+                 data-title="${safe}"
+                 data-url="${hasUrl?job.url:""}"
+                 data-duration="${hasDur?job.info.duration:"N/A"}"
+                 data-uploader="${hasUp?job.info.uploader:"Unknown"}">?</button>`;
       }
-      html += `<button class="restore-btn btn btn-sm" data-index="${index}">⤴️ Restore</button>`;
-      li.innerHTML = html;
-      el.appendChild(li);
+      html += `<button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;
+      li.innerHTML = html; el.appendChild(li);
     });
   }
 
-  // Song Info modal
   const songInfoModal = new bootstrap.Modal(document.getElementById("songInfoModal"));
   document.addEventListener("click", e => {
     if (e.target.classList.contains("info-btn")) {
       const t = e.target.dataset;
       document.getElementById("songTitleHeading").textContent = t.title;
       const link = document.getElementById("songUrlLink");
-      if (t.url) { link.textContent = t.url; link.href = t.url; }
+      if (t.url) { link.textContent =
+ t.url; link.href = t.url; }
       else { link.textContent = "None"; link.removeAttribute("href"); }
       let dur = "N/A";
       if (t.duration !== "N/A") {
-        const secs = Math.floor(parseFloat(t.duration) || 0);
-        const m = Math.floor(secs / 60), s = secs % 60;
-        dur = `${m}:${s.toString().padStart(2, "0")}`;
+        const secs = Math.floor(parseFloat(t.duration)||0),
+              m = Math.floor(secs/60), s = secs%60;
+        dur = `${m}:${s.toString().padStart(2,"0")}`;
       }
       document.getElementById("songDurationText").textContent = dur;
-      document.getElementById("uploaderText").textContent = t.uploader || "Unknown";
+      document.getElementById("uploaderText").textContent = t.uploader||"Unknown";
       songInfoModal.show();
     }
   });
 
-  // Controls: remove, next, restore, sort
-  $(document).on("click", ".remove-btn", function() {
-    socket.emit("remove_song", { room_id: roomId, index: $(this).data("index") });
+  $(document).on("click",".remove-btn",function(){
+    socket.emit("remove_song",{room_id:roomId,index:$(this).data("index")});
   });
-  document.getElementById("nextSongBtn").addEventListener("click", () => {
-    fetch(`/next_song/${roomId}`, { method: "POST" });
+  document.getElementById("nextSongBtn").addEventListener("click",()=>
+    fetch(`/next_song/${roomId}`,{method:"POST"})
+  );
+  $(document).on("click",".restore-btn",function(){
+    const idx=$(this).data("index");
+    fetch(`/restore_song/${roomId}`,{
+      method:"POST",
+      headers:{"Content-Type":"application/x-www-form-urlencoded"},
+      body:"index="+encodeURIComponent(idx)
+    }).then(r=>r.json()).then(j=>j.error&&alert(j.error));
   });
-  $(document).on("click", ".restore-btn", function() {
-    const idx = $(this).data("index");
-    fetch(`/restore_song/${roomId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "index=" + encodeURIComponent(idx)
-    }).then(r => r.json()).then(j => j.error && alert(j.error));
-  });
-  new Sortable(document.getElementById("playlist"), {
-    handle: ".drag-handle",
-    animation: 150,
-    onStart: evt => { if (evt.item.classList.contains("playing-song")) evt.preventDefault(); },
-    onEnd: evt => {
-      socket.emit("reorder_playlist", {
-        room_id: roomId,
-        oldIndex: evt.oldIndex,
-        newIndex: evt.newIndex
-      });
-    }
+  new Sortable(document.getElementById("playlist"),{
+    handle:".drag-handle",animation:150,
+    onStart:evt=>{ if(evt.item.classList.contains("playing-song")) evt.preventDefault(); },
+    onEnd:evt=>{ socket.emit("reorder_playlist",{
+        room_id:roomId,oldIndex:evt.oldIndex,newIndex:evt.newIndex
+    }); }
   });
 
-  // Helper functions
-  function generateCoolNickname() {
-    const adj = ["Funky","Silly","Lucky","Fierce","Chill","Magic","Cool","Shiny","Cosmic","Happy"];
-    const ani = ["Llama","Badger","Koala","Tiger","Panda","Unicorn","Dolphin","Moose","Chicken"];
-    return adj[Math.floor(Math.random()*adj.length)] +
-           ani[Math.floor(Math.random()*ani.length)] +
-           Math.floor(Math.random()*100);
+  function formatDuration(sec){ const t=parseInt(sec,10),m=Math.floor(t/60),s=t%60; return `${m}:${s.toString().padStart(2,"0")}`; }
+  function formatViews(num){
+    if(num>=1e6)return (num/1e6).toFixed(1).replace(/\.0$/,"")+"M views";
+    if(num>=1e3)return (num/1e3).toFixed(1).replace(/\.0$/,"")+"K views";
+    return num+" views";
   }
-  function updatePageTitle(name) {
-    pageTitle.innerHTML =
-      `Karaoke Playlist<br><span style="font-size:32px;">Room: ${roomId}</span>`;
+  function generateCoolNickname(){
+    const adj=["Funky","Silly","Lucky","Fierce","Chill","Magic","Cool","Shiny","Cosmic","Happy"],
+          ani=["Llama","Badger","Koala","Tiger","Panda","Unicorn","Dolphin","Moose","Chicken"];
+    return adj[Math.floor(Math.random()*adj.length)]+ani[Math.floor(Math.random()*ani.length)]+Math.floor(Math.random()*100);
+  }
+  function updatePageTitle(name){
+    pageTitle.innerHTML = `Karaoke Playlist<br><span style="font-size:32px;">Room: ${roomId}</span>`;
+  }
+  function getStatusIcon(s){
+    return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s;
   }
 });
-
-// Status icon helper
-function getStatusIcon(status) {
-  switch (status) {
-    case "idle": return "⌛";
-    case "processing": return "🔄";
-    case "done": return "✅";
-    case "error": return "💀";
-    default: return status;
-  }
-}
 </script>
 </body>
 </html>
