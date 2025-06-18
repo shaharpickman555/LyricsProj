@@ -112,28 +112,22 @@
       </label>
     </div>
 
-    <!-- YouTube input group: larger -->
+    <!-- YouTube input group -->
     <div id="youtubeInputGroup" class="input-group mb-3 w-100">
       <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg" placeholder="Search YouTube or paste URL...">
       <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button>
     </div>
 
-    <!-- Local file chooser (hidden by default) -->
+    <!-- Local file chooser -->
     <div id="localFileGroup" class="mb-3 d-none">
       <input type="file" name="local_file" id="local_file" accept="video/*, audio/*" class="form-control">
     </div>
 
     <!-- Processing options -->
     <div class="mt-3">
-      <label class="form-check-label me-3">
-        <input type="radio" name="keep" value="nothing" checked> Full Karaoke
-      </label>
-      <label class="form-check-label me-3">
-        <input type="radio" name="keep" value="video"> Remove Vocals
-      </label>
-      <label class="form-check-label">
-        <input type="radio" name="keep" value="all"> Keep Video
-      </label>
+      <label class="form-check-label me-3"><input type="radio" name="keep" value="nothing" checked> Full Karaoke</label>
+      <label class="form-check-label me-3"><input type="radio" name="keep" value="video"> Remove Vocals</label>
+      <label class="form-check-label"><input type="radio" name="keep" value="all"> Keep Video</label>
     </div>
 
     <!-- Advanced toggle -->
@@ -165,6 +159,12 @@
 
   <!-- Playlist & Controls -->
   <div class="playlist-container">
+    <!-- Open Player always visible at top -->
+    <div class="d-flex justify-content-center mb-3">
+      <a href="/player/{{ room_id }}" target="_blank" class="btn btn-secondary w-25">Open Player</a>
+    </div>
+
+    <!-- Playlist section toggles on content -->
     <div id="playlistSection" style="display:none;">
       <h2 class="text-center">Playlist</h2>
       <ul id="playlist" class="list-group"></ul>
@@ -175,50 +175,43 @@
       <h3 class="text-center text-secondary">Previous Songs</h3>
       <ul id="previousPlaylist" class="list-group"></ul>
     </div>
-    <div class="d-flex justify-content-center mt-3">
-      <a href="/player/{{ room_id }}" target="_blank" class="btn btn-secondary w-25">Open Player</a>
-    </div>
   </div>
 </div>
 
 <!-- Song Info Modal -->
 <div class="modal fade" id="songInfoModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Song Info</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <h6 id="songTitleHeading" class="mb-3 text-primary"></h6>
-        <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
-        <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
-        <p><strong>Uploader:</strong> <span id="uploaderText"></span></p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Song Info</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
     </div>
-  </div>
+    <div class="modal-body">
+      <h6 id="songTitleHeading" class="mb-3 text-primary"></h6>
+      <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
+      <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
+      <p><strong>Uploader:</strong> <span id="uploaderText"></span></p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    </div>
+  </div></div>
 </div>
 
 <!-- YouTube Search Results Modal -->
 <div class="modal fade" id="ytSearchModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Select YouTube Video</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="ytResultsContainer" class="row gy-3"></div>
-        <div id="ytMoreContainer" class="text-center mt-3"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-      </div>
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Select YouTube Video</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
     </div>
-  </div>
+    <div class="modal-body">
+      <div id="ytResultsContainer" class="row gy-3"></div>
+      <div id="ytMoreContainer" class="text-center mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    </div>
+  </div></div>
 </div>
 
 <script>
@@ -291,7 +284,7 @@ document.addEventListener("DOMContentLoaded", () => {
           alert("Cannot connect to the URL. Please supply a valid YouTube URL.");
         });
     } else {
-      // Local file selected
+      // Local file
       const curr = nicknameInput.value.trim() || generateCoolNickname();
       uploaderField.value = curr;
       localStorage.setItem("karaokeNickname", curr);
@@ -442,6 +435,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (job.status === "processing") {
         const pct = Math.round((job.progress || 0) * 100);
         html += `
+
           <div class="progress mt-2">
             <div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark"
                  role="progressbar"
