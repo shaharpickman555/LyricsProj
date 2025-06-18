@@ -266,7 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     if (sourceYoutube.checked) {
       const url = ytInput.value.trim();
-      const ytUrlPattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/).+/;
+      const ytUrlPattern = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/).+/;
       if (!ytUrlPattern.test(url)) {
         alert("You must supply a valid YouTube URL.\nUse the search for finding your song");
         return;
