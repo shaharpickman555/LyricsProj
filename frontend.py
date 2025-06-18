@@ -4,7 +4,7 @@ import random, string, time, pprint
 import re, traceback
 from io import BytesIO
 
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response, send_file
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response, send_file, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.utils import secure_filename
 import qrcode
@@ -20,6 +20,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SONGS_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
+app.secret_key = 'dev'
 app.config['MAX_CONTENT_LENGTH'] = max_job_filesize
 socketio = SocketIO(app)
 rooms = {}
@@ -174,8 +175,8 @@ def add_song(room_id):
         uploader_name = request.form.get("uploader") or "Unknown"
         if uploader_name:
             job.info["uploader"] = uploader_name
-    except:
-        # TODO: handle error
+    except Exception as e:
+        flash(f"Error creating job: {str(e)}", "danger")
         return redirect(url_for("index", room_id=room_id))
     
     playlist.append(job)
