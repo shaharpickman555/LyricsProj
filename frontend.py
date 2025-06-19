@@ -322,6 +322,21 @@ def search_yt(many):
         
     return jsonify(results), 200
 
+@app.route("/singlemode")
+def singlemode():
+    room_id = "singlemode"
+    create_room_if_valid(room_id)
+    data = get_room(room_id)
+    current = get_current_song(room_id)
+    return render_template(
+        "singlemode.html",
+        playlist=data["playlist"],
+        previous_songs=data["previous_songs"],
+        current_song=current,
+        room_id=room_id,
+        languages=ALLOWED_LANGUAGE_HINTS
+    )
+
 @socketio.on("connect")
 def on_connect():
     emit("rooms_list_updated", list(rooms.keys()))
