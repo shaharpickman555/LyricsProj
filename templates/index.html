@@ -309,7 +309,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPlaylist(data.playlist);
     renderPrevious(data.previous_songs);
     document.getElementById("playlistSection").style.display =
-      data.playlist.length > 0 ? "block" : "none";
+            (data.playlist.length > 0 || data.previous_songs.length > 0) ? "block" : "none";
   });
   document.getElementById("playlistSection").style.display = "none";
 
