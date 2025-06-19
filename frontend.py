@@ -153,7 +153,7 @@ def add_song(room_id):
     if request.form.get("dont_overlay_video"):
         job_params["blank_video"] = True
 
-    # 2) lang_hint
+    # 3) lang_hint
     lang_hint = request.form.get("lang_hint", "None")
     if lang_hint and lang_hint in ALLOWED_LANGUAGE_HINTS:
         job_params["lang_hint"] = lang_hint
@@ -168,13 +168,7 @@ def add_song(room_id):
         return redirect(url_for("index", room_id=room_id))
 
     try:
-        # If your Job class doesn't have "no_cache" or "lang_hint",
-        # it will simply ignore extra kwargs or raise an error.
-        # If it raises an error, we handle it in except.
         job = Job(**job_params)
-        uploader_name = request.form.get("uploader") or "Unknown"
-        if uploader_name:
-            job.info["uploader"] = uploader_name
     except Exception as e:
         flash(f"Error creating job: {str(e)}", "danger")
         return redirect(url_for("index", room_id=room_id))
