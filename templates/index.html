@@ -26,6 +26,16 @@
     .modal-body a { word-wrap: break-word; overflow-wrap: anywhere; display: inline-block; max-width: 100%; }
     .youtube-result-card.card { transition: transform 0.2s; }
     .youtube-result-card.selected { border: 2px solid #28a745; }
+    /* spinner overlay */
+    .loading-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.8);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
   </style>
 </head>
 <body>
@@ -48,16 +58,28 @@
     <button type="button" id="saveNameBtn" class="btn btn-sm btn-primary" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Save</button>
   </div>
 
-  <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow">
+  <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}" method="POST"
+        enctype="multipart/form-data" class="p-3 bg-white rounded shadow" style="position:relative;">
     <input type="hidden" name="uploader" id="uploaderField" value="">
 
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+
     <div class="mb-3">
-      <label class="form-check-label me-3"><input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube</label>
-      <label class="form-check-label"><input type="radio" name="source" value="local" id="sourceLocal"> Local File</label>
+      <label class="form-check-label me-3">
+        <input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube
+      </label>
+      <label class="form-check-label">
+        <input type="radio" name="source" value="local" id="sourceLocal"> Local File
+      </label>
     </div>
 
     <div id="youtubeInputGroup" class="input-group mb-3 w-100">
-      <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg" placeholder="Search YouTube or paste URL...">
+      <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg"
+             placeholder="Search YouTube or paste URL...">
       <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button>
     </div>
 
@@ -90,7 +112,7 @@
       </div>
     </div>
 
-    <span id="addSongWrapper" class="d-block" data-bs-toggle="tooltip" title="A valid YouTube URL is needed to add a song">
+    <span id="addSongWrapper" class="d-block" data-bs-toggle="tooltip" title="A valid YouTube URL is needed">
       <button id="addSongBtn" type="submit" class="btn btn-primary w-100 mt-3" disabled>Add Song</button>
     </span>
   </form>
@@ -154,6 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const addSongForm = document.getElementById("addSongForm");
   const addSongBtn = document.getElementById("addSongBtn");
   const addSongWrapper = document.getElementById("addSongWrapper");
+  const loadingOverlay = document.getElementById("loadingOverlay");
   const sourceYoutube = document.getElementById("sourceYoutube");
   const sourceLocal   = document.getElementById("sourceLocal");
   const ytInput       = document.getElementById("youtube_url");
@@ -227,6 +250,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   addSongForm.addEventListener("submit", e => {
     e.preventDefault();
+    loadingOverlay.style.display = "flex";
     addSongForm.submit();
   });
 
@@ -312,13 +336,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       html += `</div>`;
       const safe = job.title.replace(/"/g,"&quot;");
-      // uploader always current nickname:
       const uploader = localStorage.getItem("karaokeNickname")||"";
-      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
-                data-title="${safe}"
-                data-url="${job.url||""}"
-                data-duration="${job.info?.duration||"N/A"}"
-                data-uploader="${uploader}">?</button>`;
+      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn" data-title="${safe}" data-url="${job.url||""}" data-duration="${job.info?.duration||"N/A"}" data-uploader="${uploader}">?</button>`;
       if (!job.is_playing) html += `<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
       li.innerHTML = html;
       el.appendChild(li);
@@ -335,11 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
       let html = `<div class="flex-grow-1 text-start">${job.title}</div>`;
       const safe = job.title.replace(/"/g,"&quot;");
       const uploader = localStorage.getItem("karaokeNickname")||"Unknown";
-      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
-                data-title="${safe}"
-                data-url="${job.url||""}"
-                data-duration="${job.info?.duration||"N/A"}"
-                data-uploader="${uploader}">?</button>`;
+      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn" data-title="${safe}" data-url="${job.url||""}" data-duration="${job.info?.duration||"N/A"}" data-uploader="${uploader}">?</button>`;
       html += `<button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;
       li.innerHTML = html;
       el.appendChild(li);
@@ -356,8 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else { link.textContent = "None"; link.removeAttribute("href"); }
       let dur = "N/A";
       if (t.duration !== "N/A") {
-        const secs = Math.floor(parseFloat(t.duration)||0),
-              m = Math.floor(secs/60), s = secs%60;
+        const secs = Math.floor(parseFloat(t.duration)||0), m = Math.floor(secs/60), s = secs%60;
         dur = `${m}:${s.toString().padStart(2,"0")}`;
       }
       document.getElementById("songDurationText").textContent = dur;
@@ -375,15 +389,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $(document).on("click",".restore-btn",function(){
     const idx=$(this).data("index");
     fetch(`/restore_song/${roomId}`,{
-      method:"POST",
-      headers:{"Content-Type":"application/x-www-form-urlencoded"},
+      method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
       body:"index="+encodeURIComponent(idx)
     }).then(r=>r.json()).then(j=>j.error&&alert(j.error));
   });
   new Sortable(document.getElementById("playlist"),{
     handle:".drag-handle", animation:150,
     onStart:evt=>{ if(evt.item.classList.contains("playing-song")) evt.preventDefault(); },
-    onEnd:evt=>{ socket.emit("reorder_playlist",{room_id: roomId, oldIndex:evt.oldIndex, newIndex:evt.newIndex}); }
+    onEnd:evt=>{ socket.emit("reorder_playlist",{room_id:roomId,oldIndex:evt.oldIndex,newIndex:evt.newIndex}); }
   });
 
   function formatDuration(sec){ const t=parseInt(sec,10), m=Math.floor(t/60), s=t%60; return `${m}:${s.toString().padStart(2,"0")}`; }
