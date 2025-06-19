@@ -26,15 +26,20 @@
     .modal-body a { word-wrap: break-word; overflow-wrap: anywhere; display: inline-block; max-width: 100%; }
     .youtube-result-card.card { transition: transform 0.2s; }
     .youtube-result-card.selected { border: 2px solid #28a745; }
-    /* spinner overlay */
     .loading-overlay {
-      display: none;
       position: absolute;
       inset: 0;
       background: rgba(255,255,255,0.8);
       z-index: 2000;
+      display: none;
       align-items: center;
       justify-content: center;
+    }
+    .song-thumbnail {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin-bottom: 1rem;
     }
   </style>
 </head>
@@ -48,26 +53,20 @@
     </div>
   {% endif %}
 {% endwith %}
-
 <div class="container">
   <h1 id="pageTitle" class="text-center" style="margin:13px; line-height:1.1; font-size:52px;"></h1>
-
   <div class="d-flex justify-content-start align-items-center mb-3" style="gap:0.25rem;">
     <label for="nicknameInput" class="fw-bold mb-0">Name:</label>
     <input type="text" id="nicknameInput" class="form-control" style="max-width:100px;font-size:0.8rem;padding:0.2rem;" placeholder="Name">
     <button type="button" id="saveNameBtn" class="btn btn-sm btn-primary" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Save</button>
   </div>
-
-  <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}" method="POST"
-        enctype="multipart/form-data" class="p-3 bg-white rounded shadow" style="position:relative;">
+  <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow" style="position: relative;">
     <input type="hidden" name="uploader" id="uploaderField" value="">
-
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner-border text-primary" role="status">
         <span class="visually-hidden">Loading…</span>
       </div>
     </div>
-
     <div class="mb-3">
       <label class="form-check-label me-3">
         <input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube
@@ -76,23 +75,18 @@
         <input type="radio" name="source" value="local" id="sourceLocal"> Local File
       </label>
     </div>
-
     <div id="youtubeInputGroup" class="input-group mb-3 w-100">
-      <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg"
-             placeholder="Search YouTube or paste URL...">
+      <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg" placeholder="Search YouTube or paste URL...">
       <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button>
     </div>
-
     <div id="localFileGroup" class="mb-3 d-none">
       <input type="file" name="local_file" id="local_file" accept="video/*,audio/*" class="form-control">
     </div>
-
     <div class="mt-3">
       <label class="form-check-label me-3"><input type="radio" name="keep" value="nothing" checked> Full Karaoke</label>
       <label class="form-check-label me-3"><input type="radio" name="keep" value="video"> Remove Vocals</label>
       <label class="form-check-label"><input type="radio" name="keep" value="all"> Keep Video</label>
     </div>
-
     <button type="button" id="toggleAdvancedBtn" class="btn btn-outline-secondary mt-3">Advanced ▼</button>
     <div id="advancedSection">
       <div class="form-check mb-3">
@@ -111,14 +105,11 @@
         </select>
       </div>
     </div>
-
-    <span id="addSongWrapper" class="d-block" data-bs-toggle="tooltip" title="A valid YouTube URL is needed">
+    <span id="addSongWrapper" class="d-block" data-bs-toggle="tooltip" title="A valid YouTube URL is needed to add a song">
       <button id="addSongBtn" type="submit" class="btn btn-primary w-100 mt-3" disabled>Add Song</button>
     </span>
   </form>
-
   <hr>
-
   <div class="playlist-container">
     <div class="d-flex justify-content-center mb-3">
       <a href="/player/{{ room_id }}" target="_blank" class="btn btn-secondary w-25">Open Player</a>
@@ -143,10 +134,11 @@
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
-      <h6 id="songTitleHeading" class="mb-3 text-primary"></h6>
-      <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
+      <h6 id="songTitleHeading" class="mb-3"></h6>
+      <img id="songThumbnail" class="song-thumbnail d-none" src="" alt="Thumbnail">
       <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
       <p><strong>Uploader:</strong> <span id="uploaderText"></span></p>
+      <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
   </div></div>
@@ -184,6 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const ytModal       = new bootstrap.Modal(document.getElementById("ytSearchModal"));
   const ytResultsContainer = document.getElementById("ytResultsContainer");
   const ytMoreContainer    = document.getElementById("ytMoreContainer");
+  const songThumbnail      = document.getElementById("songThumbnail");
   let allResults = [];
 
   const tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper);
@@ -315,7 +308,8 @@ document.addEventListener("DOMContentLoaded", () => {
   socket.on("playlist_updated", data => {
     renderPlaylist(data.playlist);
     renderPrevious(data.previous_songs);
-    document.getElementById("playlistSection").style.display = data.playlist.length > 0 ? "block" : "none";
+    document.getElementById("playlistSection").style.display =
+      data.playlist.length > 0 ? "block" : "none";
   });
   document.getElementById("playlistSection").style.display = "none";
 
@@ -335,9 +329,15 @@ document.addEventListener("DOMContentLoaded", () => {
         html += `<div class="progress mt-2"><div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">${pct}%</div></div>`;
       }
       html += `</div>`;
-      const safe = job.title.replace(/"/g,"&quot;");
-      const uploader = localStorage.getItem("karaokeNickname")||"";
-      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn" data-title="${safe}" data-url="${job.url||""}" data-duration="${job.info?.duration||"N/A"}" data-uploader="${uploader}">?</button>`;
+      const safe      = job.title.replace(/"/g,"&quot;");
+      const uploader  = localStorage.getItem("karaokeNickname") || "";
+      const thumbnail = job.info?.thumbnail || "";
+      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
+                data-title="${safe}"
+                data-url="${job.url||""}"
+                data-duration="${job.info?.duration||"N/A"}"
+                data-uploader="${uploader}"
+                data-thumbnail="${thumbnail}">?</button>`;
       if (!job.is_playing) html += `<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
       li.innerHTML = html;
       el.appendChild(li);
@@ -352,9 +352,15 @@ document.addEventListener("DOMContentLoaded", () => {
       li.dataset.index = i;
       li.className = "list-group-item d-flex justify-content-between align-items-center";
       let html = `<div class="flex-grow-1 text-start">${job.title}</div>`;
-      const safe = job.title.replace(/"/g,"&quot;");
-      const uploader = localStorage.getItem("karaokeNickname")||"Unknown";
-      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn" data-title="${safe}" data-url="${job.url||""}" data-duration="${job.info?.duration||"N/A"}" data-uploader="${uploader}">?</button>`;
+      const safe      = job.title.replace(/"/g,"&quot;");
+      const uploader  = localStorage.getItem("karaokeNickname") || "Unknown";
+      const thumbnail = job.info?.thumbnail || "";
+      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
+                data-title="${safe}"
+                data-url="${job.url||""}"
+                data-duration="${job.info?.duration||"N/A"}"
+                data-uploader="${uploader}"
+                data-thumbnail="${thumbnail}">?</button>`;
       html += `<button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;
       li.innerHTML = html;
       el.appendChild(li);
@@ -366,6 +372,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.classList.contains("info-btn")) {
       const t = e.target.dataset;
       document.getElementById("songTitleHeading").textContent = t.title;
+      if (t.thumbnail) {
+        songThumbnail.src = t.thumbnail;
+        songThumbnail.classList.remove("d-none");
+      } else {
+        songThumbnail.classList.add("d-none");
+      }
       const link = document.getElementById("songUrlLink");
       if (t.url) { link.textContent = t.url; link.href = t.url; }
       else { link.textContent = "None"; link.removeAttribute("href"); }
@@ -380,30 +392,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  $(document).on("click",".remove-btn", function(){
-    socket.emit("remove_song",{room_id:roomId,index:$(this).data("index")});
+  $(document).on("click", ".remove-btn", function(){
+    socket.emit("remove_song", { room_id: roomId, index: $(this).data("index") });
   });
-  document.getElementById("nextSongBtn").addEventListener("click", ()=> {
-    fetch(`/next_song/${roomId}`,{method:"POST"});
+  document.getElementById("nextSongBtn").addEventListener("click", () => {
+    fetch(`/next_song/${roomId}`, { method:"POST" });
   });
-  $(document).on("click",".restore-btn",function(){
-    const idx=$(this).data("index");
-    fetch(`/restore_song/${roomId}`,{
-      method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"},
-      body:"index="+encodeURIComponent(idx)
+  $(document).on("click", ".restore-btn", function(){
+    const idx = $(this).data("index");
+    fetch(`/restore_song/${roomId}`, {
+      method:"POST",
+      headers: {"Content-Type":"application/x-www-form-urlencoded"},
+      body: "index=" + encodeURIComponent(idx)
     }).then(r=>r.json()).then(j=>j.error&&alert(j.error));
   });
-  new Sortable(document.getElementById("playlist"),{
+  new Sortable(document.getElementById("playlist"), {
     handle:".drag-handle", animation:150,
-    onStart:evt=>{ if(evt.item.classList.contains("playing-song")) evt.preventDefault(); },
-    onEnd:evt=>{ socket.emit("reorder_playlist",{room_id:roomId,oldIndex:evt.oldIndex,newIndex:evt.newIndex}); }
+    onStart: evt => { if(evt.item.classList.contains("playing-song")) evt.preventDefault(); },
+    onEnd: evt => {
+      socket.emit("reorder_playlist", {
+        room_id: roomId,
+        oldIndex: evt.oldIndex,
+        newIndex: evt.newIndex
+      });
+    }
   });
 
-  function formatDuration(sec){ const t=parseInt(sec,10), m=Math.floor(t/60), s=t%60; return `${m}:${s.toString().padStart(2,"0")}`; }
-  function formatViews(n){ if(n>=1e6) return (n/1e6).toFixed(1).replace(/\.0$/,"")+"M views"; if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,"")+"K views"; return n+" views"; }
-  function generateCoolNickname(){ const a=["Funky","Silly","Lucky","Fierce","Chill","Magic","Cool","Shiny","Cosmic","Happy"], b=["Llama","Badger","Koala","Tiger","Panda","Unicorn","Dolphin","Moose","Chicken"]; return a[Math.floor(Math.random()*a.length)]+b[Math.floor(Math.random()*b.length)]+Math.floor(Math.random()*100); }
-  function updatePageTitle(name){ pageTitle.innerHTML=`Karaoke Playlist<br><span style="font-size:32px;">Room: ${roomId}</span>`; }
-  function getStatusIcon(s){ return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s; }
+  function formatDuration(sec) {
+    const t = parseInt(sec,10), m = Math.floor(t/60), s = t%60;
+    return `${m}:${s.toString().padStart(2,"0")}`;
+  }
+  function formatViews(n){
+    if(n>=1e6) return (n/1e6).toFixed(1).replace(/\.0$/,"")+"M views";
+    if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,"")+"K views";
+    return n+" views";
+  }
+  function generateCoolNickname(){
+    const a = ["Funky","Silly","Lucky","Fierce","Chill","Magic","Cool","Shiny","Cosmic","Happy"];
+    const b = ["Llama","Badger","Koala","Tiger","Panda","Unicorn","Dolphin","Moose","Chicken"];
+    return a[Math.floor(Math.random()*a.length)] + b[Math.floor(Math.random()*b.length)] + Math.floor(Math.random()*100);
+  }
+  function updatePageTitle(name){
+    pageTitle.innerHTML = `Karaoke Playlist<br><span style="font-size:32px;">Room: ${roomId}</span>`;
+  }
+  function getStatusIcon(s){
+    return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s;
+  }
 });
 </script>
 </body>
