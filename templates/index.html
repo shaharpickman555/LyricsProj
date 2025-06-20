@@ -84,9 +84,9 @@
       <input type="file" name="local_file" id="local_file" accept="video/*,audio/*" class="form-control">
     </div>
     <div class="mt-3">
-      <label class="form-check-label me-3"><input type="radio" name="keep" value="nothing" checked> Full Karaoke</label>
-      <label class="form-check-label me-3"><input type="radio" name="keep" value="video"> Remove Vocals</label>
-      <label class="form-check-label"><input type="radio" name="keep" value="all"> Keep Video</label>
+      <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Create lyrics + Remove vocals"><input type="radio" name="keep" value="nothing" checked> Full Karaoke</label>
+      <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Remove vocals only, without lyrics"><input type="radio" name="keep" value="video"> Remove Vocals</label>
+      <label class="form-check-label" data-bs-toggle="tooltip" title="Add the video to the playlist as is"><input type="radio" name="keep" value="all"> Keep Video</label>
     </div>
     <button type="button" id="toggleAdvancedBtn" class="btn btn-outline-secondary mt-3">Advanced ▼</button>
     <div id="advancedSection">
@@ -184,6 +184,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper);
   const searchWrapper = document.getElementById("ytSearchWrapper");
   const searchTooltip = bootstrap.Tooltip.getOrCreateInstance(searchWrapper);
+  document.querySelectorAll('#addSongForm label[data-bs-toggle="tooltip"]').forEach(el => {
+    bootstrap.Tooltip.getOrCreateInstance(el);
+  });
   let storedName = localStorage.getItem("karaokeNickname");
   if (!storedName || !storedName.trim()) storedName = generateCoolNickname();
   nicknameInput.value = storedName;
