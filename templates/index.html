@@ -77,7 +77,8 @@
     </div>
     <div id="youtubeInputGroup" class="input-group mb-3 w-100">
       <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg" placeholder="Search YouTube or paste URL...">
-      <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button>
+          <span id="ytSearchWrapper" style="display: inline-flex;" data-bs-toggle="tooltip" title="Searching is for YouTube keywords, not URLs">
+      <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button></span>
     </div>
     <div id="localFileGroup" class="mb-3 d-none">
       <input type="file" name="local_file" id="local_file" accept="video/*,audio/*" class="form-control">
@@ -177,10 +178,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const ytResultsContainer = document.getElementById("ytResultsContainer");
   const ytMoreContainer    = document.getElementById("ytMoreContainer");
   const songThumbnail      = document.getElementById("songThumbnail");
+  const localFileInput = document.getElementById("local_file");
   let allResults = [];
 
   const tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper);
-
+  const searchWrapper = document.getElementById("ytSearchWrapper");
+  const searchTooltip = bootstrap.Tooltip.getOrCreateInstance(searchWrapper);
   let storedName = localStorage.getItem("karaokeNickname");
   if (!storedName || !storedName.trim()) storedName = generateCoolNickname();
   nicknameInput.value = storedName;
@@ -195,24 +198,37 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function updateAddBtnState() {
-    if (sourceLocal.checked) {
-      addSongBtn.disabled = false;
-      tooltip.disable();
-    } else {
-      const v = ytInput.value.trim();
-      if (/^https?:\/\//.test(v)) {
-        addSongBtn.disabled = false;
-        tooltip.disable();
-      } else {
-        addSongBtn.disabled = true;
-        addSongWrapper.setAttribute("data-bs-original-title", "A valid YouTube URL is needed to add a song");
-        tooltip.enable();
+        if (sourceLocal.checked) {
+          if (localFileInput.files.length > 0) {
+            addSongBtn.disabled = false;
+            tooltip.disable();
+          } else {
+            addSongBtn.disabled = true;
+            addSongWrapper.setAttribute("data-bs-original-title","You need to choose a local audio file first");
+            tooltip.enable();
+          }
+        } else {
+          const v = ytInput.value.trim();
+          if (/^https?:\/\//.test(v)) {
+            addSongBtn.disabled = false;
+            tooltip.disable();
+          } else {
+            addSongBtn.disabled = true;
+            addSongWrapper.setAttribute("data-bs-original-title","A valid YouTube URL is needed");
+            tooltip.enable();
+          }
+        }
+        ytSearchBtn.disabled = sourceYoutube.checked && !addSongBtn.disabled;
+        if (ytSearchBtn.disabled && sourceYoutube.checked) {
+          searchTooltip.enable();
+        } else {
+          searchTooltip.disable();
+        }
       }
-    }
-  }
   ytInput.addEventListener("input", updateAddBtnState);
   sourceYoutube.addEventListener("change", updateAddBtnState);
   sourceLocal.addEventListener("change", updateAddBtnState);
+  localFileInput.addEventListener("change", updateAddBtnState);
   updateAddBtnState();
 
   function toggleSource() {
@@ -251,7 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ytInput.addEventListener("keypress", e => {
     if (e.key === "Enter") {
       e.preventDefault();
-      performYtSearch();
+      if (!ytSearchBtn.disabled) performYtSearch();
     }
   });
 
