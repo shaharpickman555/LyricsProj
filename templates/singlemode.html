@@ -260,20 +260,50 @@
           tooltip.enable();
         }
       }
-      ytSearchBtn.disabled = sourceYoutube.checked && !addSongBtn.disabled;
-      if (ytSearchBtn.disabled && sourceYoutube.checked) {
-        searchTooltip.enable();
-      } else {
-        searchTooltip.disable();
-      }
     }
-    ytInput.addEventListener("input", updateAddBtnState);
-    sourceYoutube.addEventListener("change", updateAddBtnState);
-    sourceLocal.addEventListener("change", updateAddBtnState);
-    localFileInput.addEventListener("change", updateAddBtnState);
-    updateAddBtnState();
+  function updateSearchBtnState() {
+    // if we’re not on YouTube mode, always disable
+    if (!sourceYoutube.checked) {
+      ytSearchBtn.disabled = true;
+      searchTooltip.disable();
+      return;
+    }
+    const v = ytInput.value.trim();
+    if (v === "") {
+      // empty → “Write keywords to search”
+      ytSearchBtn.disabled = true;
+      searchWrapper.setAttribute("data-bs-original-title", "Write keywords to search");
+      searchTooltip.enable();
+    }
+    else if (/^https?:\/\//.test(v)) {
+      // looks like a URL → “Searching is for YouTube keywords, not URLs”
+      ytSearchBtn.disabled = true;
+      searchWrapper.setAttribute("data-bs-original-title", "Searching is for YouTube keywords, not URLs");
+      searchTooltip.enable();
+    }
+    else {
+      // anything else is OK
+      ytSearchBtn.disabled = false;
+      searchTooltip.disable();
+    }
+  }
 
-    function toggleSource() {
+  function onSourceOrInputChange() {
+    updateAddBtnState();
+    updateSearchBtnState();
+  }
+
+  ytInput.addEventListener   ("input",  onSourceOrInputChange);
+  sourceYoutube.addEventListener("change", onSourceOrInputChange);
+  sourceLocal.addEventListener  ("change", onSourceOrInputChange);
+  localFileInput.addEventListener("change", updateAddBtnState);
+
+  // run once on load:
+  updateAddBtnState();
+  updateSearchBtnState();
+
+
+  function toggleSource() {
       if (sourceYoutube.checked) {
         document.getElementById("youtubeInputGroup").classList.remove("d-none");
         document.getElementById("localFileGroup").classList.add("d-none");
@@ -281,7 +311,7 @@
         document.getElementById("youtubeInputGroup").classList.add("d-none");
         document.getElementById("localFileGroup").classList.remove("d-none");
       }
-    }
+  }
     sourceYoutube.addEventListener("change", toggleSource);
     sourceLocal.addEventListener("change", toggleSource);
     toggleSource();
