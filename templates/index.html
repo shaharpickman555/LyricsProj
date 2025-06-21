@@ -303,7 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function performYtSearch() {
     const q = ytInput.value.trim();
-    const urlPat = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/).+/;
+    const urlPat = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/|youtube\.com\/shorts\/).+/;
     if (urlPat.test(q)) {
       alert("This is a valid YouTube URL. Click 'Add Song'.");
       return;
