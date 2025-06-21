@@ -334,6 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
         c.classList.add("selected");
         ytInput.value = /^https?:\/\//.test(item.url) ? item.url : `https://www.youtube.com/watch?v=${item.url}`;
         updateAddBtnState();
+        updateSearchBtnState();
         setTimeout(() => ytModal.hide(), 200);
       });
       c.addEventListener("mouseover", () => c.style.transform = "scale(1.02)");

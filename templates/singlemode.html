@@ -330,7 +330,7 @@
     });
 
     ytSearchBtn.addEventListener("click", performYtSearch);
-    ytInput.addEventListener("keypress", e => { if (e.key==="Enter") { e.preventDefault(); performYtSearch();if (!ytSearchBtn.disabled) performYtSearch(); } });
+    ytInput.addEventListener("keypress", e => { if (e.key==="Enter") { e.preventDefault(); if (!ytSearchBtn.disabled) performYtSearch(); } });
 
     function performYtSearch() {
       const q = ytInput.value.trim();
@@ -363,6 +363,7 @@
           c.classList.add("selected");
           ytInput.value=/^https?:\/\//.test(item.url)?item.url:`https://www.youtube.com/watch?v=${item.url}`;
           updateAddBtnState();
+          updateSearchBtnState();
           setTimeout(()=>ytModal.hide(),200);
         });
         c.addEventListener("mouseover",()=>c.style.transform="scale(1.02)");
