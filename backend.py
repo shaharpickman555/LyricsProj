@@ -421,7 +421,7 @@ Format: Layer, Start, End, Style, Text
     segments = [new_segment]
 
     word_durations = [word.end - word.start for line in segments[0] for word in line]
-    words_per_spoken_second = len(word_durations) / sum(word_durations)
+    words_per_spoken_second = len(word_durations) / (sum(word_durations) + 0.01)
 
     y_off = 120
 
