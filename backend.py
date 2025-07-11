@@ -303,7 +303,7 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
     return outfile, info['title']
 
 def segment(result):
-    result = [segment for segment in result if segment]
+    result = [segment for segment in result if len(segment) > 0]
     word_durations = [word.end - word.start for segment in result for word in segment]
     words_per_spoken_second = len(word_durations) / sum(word_durations)
 
