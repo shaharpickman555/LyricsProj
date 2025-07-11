@@ -81,7 +81,7 @@
                 style="font-size:0.7rem;padding:0.2rem 0.5rem;">Save</button>
       </div>
     </div>
-    <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}"
+    <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}?mode=singlemode"
           method="POST" enctype="multipart/form-data"
           class="p-3 bg-white rounded shadow" style="position: relative;">
       <input type="hidden" name="uploader" id="uploaderField" value="">
@@ -151,7 +151,7 @@
 
   <template id="playerTemplate">
     <video id="videoPlayer" autoplay playsinline></video>
-    <div id="qrMark"><img src="/qr_inv?data={{ url_for('singlemode', room_id=room_id, _external=True) }}" alt="QR code"></div>
+    <div id="qrMark"><img src="/qr_inv?data={{ url_for('singlemode_room', room_id=room_id, _external=True) }}" alt="QR code"></div>
     <div class="vjs-bar">
       <span id="btnPlay" class="vjs-btn" title="Play / Pause">⏸</span>
       <input id="vProgress" type="range" min="0" value="0" step="0.1">
@@ -173,7 +173,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <h6 id="songTitleHeading" class="mb-3 text-primary"></h6>
+        <h6 id="songTitleHeading" class="mb-3"></h6>
         <img id="songThumbnail" class="song-thumbnail d-none" src="" alt="Thumbnail">
         <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
         <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
@@ -519,7 +519,7 @@
       prog.oninput=e=>vid.currentTime=+e.target.value;
       const togglePlay=()=>vid.paused?vid.play():vid.pause();
       playBt.onclick=togglePlay; vid.onclick=togglePlay; vid.onplay=()=>playBt.textContent="⏸"; vid.onpause=()=>playBt.textContent="▶";
-      const levels=[1,0.66,0.33,0], icons=["🔊","🔉","🔈","🔇"]; let vi=0;
+      const levels=[1,0.4,0.2,0], icons=["🔊","🔉","🔈","🔇"]; let vi=0;
       applyVol(); volBt.onclick=()=>{vi=(vi+1)%levels.length;applyVol();};
       function applyVol(){ vid.volume=levels[vi]; vid.muted=vid.volume===0; volBt.textContent=icons[vi]; }
       function isFS(){ return (document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement)===cont; }

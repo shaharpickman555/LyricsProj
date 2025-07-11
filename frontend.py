@@ -126,7 +126,11 @@ def add_song(room_id):
     data = get_validated_room(room_id)
     if data is None:
         return custom_not_found()
-
+    mode = request.args.get("mode", "")
+    if mode == "singlemode":
+        redirect_string = "singlemode_room"
+    else:
+        redirect_string = "index"
     youtube_url = request.form.get("youtube_url", "").strip()
     local_file = request.files.get("local_file")
     keep_val = request.form.get("keep", "nothing")
@@ -147,18 +151,18 @@ def add_song(room_id):
         local_file.save(path)
         job_params["path"] = path
     else:
-        return redirect(url_for("index", room_id=room_id))
+        return redirect(url_for(redirect_string, room_id=room_id))
 
     try:
         job = Job(**job_params)
     except Exception as e:
         flash(f"Error creating job: {str(e)}", "danger")
-        return redirect(url_for("index", room_id=room_id))
+        return redirect(url_for(redirect_string, room_id=room_id))
 
     data["playlist"].append(job)
     set_queue(data["playlist"])
     socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
-    return redirect(url_for("index", room_id=room_id))
+    return redirect(url_for(redirect_string, room_id=room_id))
 
 @app.route("/restore_song/<room_id>", methods=["POST"])
 def restore_song(room_id):
@@ -240,11 +244,8 @@ def search_yt(many):
 
 @app.route("/singlemode")
 def singlemode():
-    room_id = "singlemode"
-    create_room_if_valid(room_id)
-    data = get_room(room_id)
-    current = get_current_song(room_id)
-    return render_template("singlemode.html", playlist=data["playlist"], previous_songs=data["previous_songs"], current_song=current, room_id=room_id, languages=ALLOWED_LANGUAGE_HINTS)
+    room_id = generate_room_id()
+    return redirect(url_for("singlemode_room", room_id=room_id))
 
 def get_current_song(room_id):
     data = get_room(room_id)
@@ -262,6 +263,21 @@ def get_current_song(room_id):
             return job
     data["current_song"] = None
     return None
+
+@app.route("/singlemode/<room_id>")
+def singlemode_room(room_id):
+    create_room_if_valid(room_id)
+    data = get_validated_room(room_id)
+    if data is None:
+        return custom_not_found()
+    current = get_current_song(room_id)
+    return render_template("singlemode.html",
+                           playlist=data["playlist"],
+                           previous_songs=data["previous_songs"],
+                           current_song=current,
+                           room_id=room_id,
+                           languages=ALLOWED_LANGUAGE_HINTS)
+
 
 def serialize_jobs(jobs, current=None):
     return [{
