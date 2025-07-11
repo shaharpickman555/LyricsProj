@@ -549,7 +549,7 @@ def try_remove(path):
     except FileNotFoundError:
         pass
 
-def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=False, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, **_):
+def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, **_):
     global whisper_model_framework
     
     if progress_cb:
