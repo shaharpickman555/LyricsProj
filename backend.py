@@ -63,8 +63,8 @@ heb_model_name = 'ivrit-ai/whisper-large-v3-ct2' if has_juice else 'tiny'
 whisper_model_frameworks = {
                     'faster':
                     {
-                        None: (default_model_name, 'faster', {}, dict(vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.5, max_speech_duration_s=2))),
-                        'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5, vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.5, max_speech_duration_s=2))),
+                        None: (default_model_name, 'faster', {}, dict(vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.1, max_speech_duration_s=2))),
+                        'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5, vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.1, max_speech_duration_s=2))),
                     },
                     'whisperx':
                     {
@@ -544,7 +544,7 @@ def extract_audio(input, output_audio):
     run_process(ffmpeg_path, '-y', '-i', input, '-vn', output_audio)
     
 def audio_with_blank(audiopath, outputpath, subtitles_path=None):
-    run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', '-fflags', '+shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
+    run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
 
 def video_with_audio(videopath, audiopath, outputpath, subtitles_path=None):
     codec = 'libx264'
@@ -556,7 +556,7 @@ def try_remove(path):
     except FileNotFoundError:
         pass
 
-def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, **_):
+def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, **_):
     global whisper_model_framework
     
     if progress_cb:
@@ -602,10 +602,12 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
         with open(asspath, 'w', encoding='utf8') as fh:
             fh.write(assdata)
         
+        output_audio_path = audiopath if original_audio else instpath
+        
         if blank_video:
-            audio_with_blank(instpath, outputpath, asspath)
+            audio_with_blank(output_audio_path, outputpath, asspath)
         else:
-            video_with_audio(inputpath, instpath, outputpath, asspath)
+            video_with_audio(inputpath, output_audio_path, outputpath, asspath)
     finally:
         if remove_intermediates:
             try_remove(audiopath)
@@ -1043,6 +1045,12 @@ def main(argv):
         default=False,
         help='Make a black subtitle video'
     )
+    parser.add_argument(
+        '-a', '--keep-audio',
+        action='store_true',
+        default=False,
+        help='Keep the audio unprocessed. (for debugging)'
+    )
     
     args = parser.parse_args()
     
@@ -1087,7 +1095,7 @@ def main(argv):
     func, available_selectors = actions[keep]
     selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=blank_video).items() if k in available_selectors}
                 
-    generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=blank_video)
+    generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=blank_video, original_audio=args.keep_audio)
 
 if __name__ == '__main__':
     main(sys.argv)
