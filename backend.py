@@ -303,6 +303,8 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
     return outfile, info['title']
 
 def segment(result):
+    if not result:
+        return []
     result = [segment for segment in result if len(segment) > 0]
     word_durations = [word.end - word.start for segment in result for word in segment]
     words_per_spoken_second = len(word_durations) / sum(word_durations)
@@ -409,6 +411,10 @@ Style: DW1, KlokanTech Noto Sans, 80, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5,
 [Events]
 Format: Layer, Start, End, Style, Text
 '''
+
+    if not segments:
+        #no text?
+        return header + 'Dialogue: 0, 0:00:00.00,0:00:00.01,Default,'
 
     #flatten and append 1 word lines
     new_segment = []
@@ -542,7 +548,7 @@ def audio_with_blank(audiopath, outputpath, subtitles_path=None):
 
 def video_with_audio(videopath, audiopath, outputpath, subtitles_path=None):
     codec = 'libx264'
-    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-fflags', '+shortest', '-filter_complex', f"[0:v]scale='max(720, iw)':-2[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]" if subtitles_path else "scale='max(720, iw)':-2[v]", '-map', '[v]:v', '-map', '1:a', '-vcodec', codec, outputpath)
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex', f"[0:v]scale='max(720, iw)':-2[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]" if subtitles_path else "scale='max(720, iw)':-2[v]", '-map', '[v]:v', '-map', '1:a', '-vcodec', codec, outputpath)
 
 def try_remove(path):
     try:
