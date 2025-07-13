@@ -63,8 +63,8 @@ heb_model_name = 'ivrit-ai/whisper-large-v3-ct2' if has_juice else 'tiny'
 whisper_model_frameworks = {
                     'faster':
                     {
-                        None: (default_model_name, 'faster', {}, dict(vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.1, max_speech_duration_s=2))),
-                        'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5, vad_filter=True, vad_parameters=faster_whisper.vad.VadOptions(threshold=0.1, max_speech_duration_s=2))),
+                        None: (default_model_name, 'faster', {}, dict(vad_filter=False)),
+                        'he': (heb_model_name, 'faster', {}, dict(patience=2, beam_size=5, vad_filter=False)),
                     },
                     'whisperx':
                     {
@@ -302,7 +302,7 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
         progress_cb(1.0)
     return outfile, info['title']
 
-def segment(result):
+def do_segmentation(result):
     if not result:
         return []
     result = [segment for segment in result if len(segment) > 0]
@@ -395,7 +395,7 @@ def ass_circle(start_layer, x, y, start_time, end_time, fadein_time):
             rf'Dialogue: {start_layer}, {ass_time(start_time - fadein_time)}, {ass_time(end_time)}, CB1, {{\pos({x}, {y})}}{{\fad({int(fadein_time * 1000)}, 0)}}{{\p1}}m 30 0 b 70 0 70 100 30 100 b -10 100 -10 0 30 0{{\p0}}']
 
 
-def make_ass_swap(segments, offset, prepare_time_seconds=5):
+def make_ass_swap(segments, prepare_time_seconds=5):
     header = '''[Script Info]
 PlayResX: 800
 PlayResY: 800
@@ -473,11 +473,11 @@ Format: Layer, Start, End, Style, Text
             line_y_off = (i % num_lines) * y_off
 
             #output uncolored line as background
-            ass_lines.append(f'Dialogue: 0, {ass_time(actual_appear_time + offset)}, {ass_time(actual_disappear_time + offset)}, W1, {{\\pos(400, {ystart + line_y_off})}}{{\\fad(1000, 1000)}}{output_line(line, None)}')
+            ass_lines.append(f'Dialogue: 0, {ass_time(actual_appear_time)}, {ass_time(actual_disappear_time)}, W1, {{\\pos(400, {ystart + line_y_off})}}{{\\fad(1000, 1000)}}{output_line(line, None)}')
 
             for word in line:
                 #output colored lines on top
-                ass_lines.append(f'Dialogue: 1, {ass_time(word.start + offset)}, {ass_time(word.end + offset)}, W1, {{\\pos(400, {ystart + line_y_off})}}{output_line(line, word)}')
+                ass_lines.append(f'Dialogue: 1, {ass_time(word.start)}, {ass_time(word.end)}, W1, {{\\pos(400, {ystart + line_y_off})}}{output_line(line, word)}')
 
             #counter
             if len(line) > 1:
@@ -485,12 +485,61 @@ Format: Layer, Start, End, Style, Text
                 if time_since_last_word >= prepare_time_seconds:
                     clock_duration = 4
 
-                    ass_lines.extend(ass_circle(2, 200, 100, line[0].start - clock_duration + offset, line[0].start + offset, 0.5))
+                    ass_lines.extend(ass_circle(2, 200, 100, line[0].start - clock_duration, line[0].start, 0.5))
 
         last_segment_end = segment[-1][-1].end
 
     return header + '\n'.join(ass_lines)
 
+#data.shape is [n_channels, samples]
+def filter_silence(data, samplerate, window=0.2, min_included=1, threshold=1/100):
+    min_windows = int(min_included / window)
+    
+    windowsize = int(samplerate * window)
+    
+    #rms over all channels
+    rms = torch.tensor([w.square().mean() ** 0.5 for w in torch.split(data, windowsize, dim=-1)])
+    rms[rms.isnan()] = 0.0
+    
+    mask = rms >= (max(rms) * threshold)
+    
+    silences = []
+    silence_start = None
+    for i, w in enumerate(itertools.chain(mask, [1])):
+        if not w:
+            if silence_start is None:
+                silence_start = i
+        else:
+            if silence_start is not None:
+                if silence_start == 0 and i > min_windows:
+                    silences.append((silence_start, i - min_windows))
+                elif i == len(mask) and (i - silence_start) > min_windows:
+                    silences.append((silence_start + min_windows, i))
+                elif (i - silence_start) > (min_windows * 2):
+                    silences.append((silence_start + min_windows, i - min_windows))
+                silence_start = None
+    
+    silence_marks = []
+    if silences:
+        nonsilence = []
+        nonsilence_start = 0
+        #invert to nonsilence
+        for s,e in silences:
+            if s != nonsilence_start:
+                nonsilence.append((nonsilence_start * windowsize, s * windowsize))
+            nonsilence_start = e
+        if nonsilence_start * windowsize < data.shape[-1]:
+            nonsilence.append((nonsilence_start * windowsize, data.shape[-1]))
+
+        data = torch.cat([data[:, s : e] for s, e in nonsilence], dim=-1)
+        silence_off = 0
+        
+        for s,e in silences:
+            silence_marks.append(((s - silence_off) * window, (e - s) * window))
+            silence_off += e - s
+            
+    return data, silence_marks
+    
 def instrumental(audioinput, output_inst, output_vocals=None, start_silence=0, end_silence=0, progress_cb=None):
     if progress_cb:
         progress_cb(0.0)
@@ -510,7 +559,8 @@ def instrumental(audioinput, output_inst, output_vocals=None, start_silence=0, e
     separator.update_parameter(callback=separator_cb)
 
     origin, separated = separator.separate_audio_file(audioinput)
-    inst = origin - separated['vocals']
+    vocals = separated['vocals']
+    inst = origin - vocals
 
     silence1 = torch.zeros([2, start_silence * separator.samplerate])
     silence2 = torch.zeros([2, end_silence * separator.samplerate])
@@ -521,13 +571,18 @@ def instrumental(audioinput, output_inst, output_vocals=None, start_silence=0, e
         progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS + SEPARATOR_MODEL_PROGRESS)
 
     if output_vocals:
-        vocals = torch.cat((silence1, separated['vocals'], silence2), dim=-1)
+        vocals = torch.cat((silence1, vocals, silence2), dim=-1)
+        vocals, silence_marks = filter_silence(vocals, separator.samplerate)
         demucs.api.save_audio(vocals, output_vocals, samplerate=separator.samplerate)
+    else:
+        silence_marks = [(0, start_silence)]
 
     demucs.api.save_audio(inst, output_inst, samplerate=separator.samplerate)
     
     if progress_cb:
         progress_cb(1.0)
+        
+    return silence_marks
         
 def run_process(*args):
     process = subprocess.run(args, capture_output=True)
@@ -584,11 +639,10 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
         extract_audio(inputpath, audiopath)
         
         silence = 0 # TODO video title
-        instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
+        silence_marks = instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
 
         if transcribe_using_vocals:
             #vocals already have silence accounted for
-            silence = 0
             #use vocals only
             transcribepath = vocalspath
         else:
@@ -596,8 +650,17 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
             
         result = transcribe_audio(transcribepath, progress_cb=transcribe_progress_cb, lang_hint=lang_hint)
         segments = align_audio(result, progress_cb=align_progress_cb)
-        segments = segment(segments)
-        assdata = make_ass_swap(segments, offset=silence + 0.0)
+        segments = do_segmentation(segments)
+        
+        fix_timing = lambda t: (t + sum(d for s,d in silence_marks if s <= t))
+        
+        #fix with silence_marks
+        for segment in segments:
+            for line in segment:
+                for word in line:
+                    word.start, word.end = fix_timing(word.start), fix_timing(word.end)
+        
+        assdata = make_ass_swap(segments)
         
         with open(asspath, 'w', encoding='utf8') as fh:
             fh.write(assdata)
