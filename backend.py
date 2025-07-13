@@ -429,7 +429,8 @@ Format: Layer, Start, End, Style, Text
 
     word_durations = [word.end - word.start for line in segments[0] for word in line]
     words_per_spoken_second = len(word_durations) / sum(word_durations)
-
+    
+    max_color_time = 5
     y_off = 120
 
     #always even
@@ -475,8 +476,20 @@ Format: Layer, Start, End, Style, Text
             #output uncolored line as background
             ass_lines.append(f'Dialogue: 0, {ass_time(actual_appear_time)}, {ass_time(actual_disappear_time)}, W1, {{\\pos(400, {ystart + line_y_off})}}{{\\fad(1000, 1000)}}{output_line(line, None)}')
 
-            for word in line:
-                #output colored lines on top
+            #output colored lines on top
+            for l, word in enumerate(line):
+                diff = word.end - word.start
+                if diff < 0.02:
+                    #dont color word if too short
+                    continue
+                if diff > max_color_time:
+                    #cap coloring time
+                    if l == 0:
+                        #first word, change start
+                        word.start = word.end - max_color_time
+                    else:
+                        #not first, change end
+                        word.end = word.start + max_color_time
                 ass_lines.append(f'Dialogue: 1, {ass_time(word.start)}, {ass_time(word.end)}, W1, {{\\pos(400, {ystart + line_y_off})}}{output_line(line, word)}')
 
             #counter
@@ -652,13 +665,15 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
         segments = align_audio(result, progress_cb=align_progress_cb)
         segments = do_segmentation(segments)
         
-        fix_timing = lambda t: (t + sum(d for s,d in silence_marks if s <= t))
+        silence_until = lambda t: sum(d for s,d in silence_marks if s <= t)
         
         #fix with silence_marks
         for segment in segments:
             for line in segment:
                 for word in line:
-                    word.start, word.end = fix_timing(word.start), fix_timing(word.end)
+                    #use word.start silence for both to avoid having a word over a silence
+                    s = silence_until(word.start)
+                    word.start, word.end = s + word.start, s + word.end
         
         assdata = make_ass_swap(segments)
         
