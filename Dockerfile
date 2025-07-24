@@ -11,7 +11,6 @@ RUN apt update && apt install -y software-properties-common
 RUN apt update && apt install -y --no-install-recommends \
     build-essential \
     ffmpeg \
-    openssh-server \
     vim \
     git \
     python3 \
@@ -20,11 +19,6 @@ RUN apt update && apt install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rm -f /opt/conda/bin/ffmpeg
-
-RUN mkdir /var/run/sshd
-COPY id_rsa.pub /tmp/id_rsa.pub
-RUN chmod 755 /root && mkdir /root/.ssh/ && chmod 700 /root/.ssh
-RUN cat /tmp/id_rsa.pub >> /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
 
 RUN pip install --no-cache-dir -U \
     pip \
@@ -52,4 +46,4 @@ RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 COPY ffmpeg .
 EXPOSE 8000
 EXPOSE 22
-CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; service ssh start; git pull origin main; pip install -U yt-dlp; exec python frontend.py"]
+CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; git pull origin main; pip install -U yt-dlp; exec python frontend.py"]
