@@ -6,30 +6,33 @@ ENV TORCH_HOME=/data/models
 ENV TZ=Asia/Jerusalem
 ENV NVIDIA_DRIVER_CAPABILITIES=all
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
 RUN apt update && apt install -y software-properties-common
 RUN apt update && apt install -y --no-install-recommends \
     build-essential \
     ffmpeg \
     vim \
     git \
-    python3 \
-    python3-dev \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rm -f /opt/conda/bin/ffmpeg
+RUN update-alternatives --install /usr/bin/python3 python3 /opt/conda/bin/python3 0
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 0
+RUN update-alternatives --install /usr/bin/pip pip /opt/conda/bin/pip 0
 
 RUN pip install --no-cache-dir -U \
     pip \
     setuptools
 RUN pip install --no-cache-dir git+https://github.com/m-bain/whisperx.git
+RUN pip install --no-deps socketio
 RUN pip install --no-cache-dir -U \
-    socketio \
     flask-socketio \
+    websocket-client \
+    requests \
+    aiohttp \
     werkzeug \
     gunicorn \
-    yt-dlp \
+    yt-dlp
+RUN pip install --no-cache-dir -U \
     faster-whisper \
     dora-search \
     einops \
