@@ -9,11 +9,12 @@ from pathlib import Path
 import requests
 import unicodedata
 import torch
-import demucs.api
 import yt_dlp
 import torch
 import whisperx
 import faster_whisper
+
+import instrumental
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -47,9 +48,6 @@ YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
 DETECT_LANGUAGE_PROGRESS = 0.1
 LOAD_TRANSCRIBE_MODEL_PROGRESS = 0.1 #10% detection, 10% load, 80% process
-
-LOAD_SEPARATOR_MODEL_PROGRESS = 0.1
-SEPARATOR_MODEL_PROGRESS = 0.75 #10% load, 75% process, 15% save
 
 LYRICS_VIDEO_SEPARATOR_PROGRESS = 0.5
 LYRICS_VIDEO_TRANSCRIBE_PROGRESS = 0.3
@@ -235,14 +233,6 @@ def align_audio(transcribe_result, progress_cb=None):
     if progress_cb:
         progress_cb(1.0)
     return segments
-
-loaded_separator = None
-def load_separator():
-    global loaded_separator
-    if loaded_separator is not None:
-        return loaded_separator
-    loaded_separator = demucs.api.Separator(model='htdemucs')
-    return loaded_separator
 
 def getitem(l, i, default=None):
     try:
@@ -503,99 +493,6 @@ Format: Layer, Start, End, Style, Text
         last_segment_end = segment[-1][-1].end
 
     return header + '\n'.join(ass_lines)
-
-#data.shape is [n_channels, samples]
-def filter_silence(data, samplerate, window=0.2, min_included=1, threshold=1/100):
-    min_windows = int(min_included / window)
-    
-    windowsize = int(samplerate * window)
-    
-    #rms over all channels
-    rms = torch.tensor([w.square().mean() ** 0.5 for w in torch.split(data, windowsize, dim=-1)])
-    rms[rms.isnan()] = 0.0
-    
-    mask = rms >= (max(rms) * threshold)
-    
-    silences = []
-    silence_start = None
-    for i, w in enumerate(itertools.chain(mask, [1])):
-        if not w:
-            if silence_start is None:
-                silence_start = i
-        else:
-            if silence_start is not None:
-                if silence_start == 0 and i > min_windows:
-                    silences.append((silence_start, i - min_windows))
-                elif i == len(mask) and (i - silence_start) > min_windows:
-                    silences.append((silence_start + min_windows, i))
-                elif (i - silence_start) > (min_windows * 2):
-                    silences.append((silence_start + min_windows, i - min_windows))
-                silence_start = None
-    
-    silence_marks = []
-    if silences:
-        nonsilence = []
-        nonsilence_start = 0
-        #invert to nonsilence
-        for s,e in silences:
-            if s != nonsilence_start:
-                nonsilence.append((nonsilence_start * windowsize, s * windowsize))
-            nonsilence_start = e
-        if nonsilence_start * windowsize < data.shape[-1]:
-            nonsilence.append((nonsilence_start * windowsize, data.shape[-1]))
-
-        data = torch.cat([data[:, s : e] for s, e in nonsilence], dim=-1)
-        silence_off = 0
-        
-        for s,e in silences:
-            silence_marks.append(((s - silence_off) * window, (e - s) * window))
-            silence_off += e - s
-            
-    return data, silence_marks
-    
-def instrumental(audioinput, output_inst, output_vocals=None, start_silence=0, end_silence=0, progress_cb=None):
-    if progress_cb:
-        progress_cb(0.0)
-        
-    separator = load_separator()
-    
-    if progress_cb:
-        progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS)
-         
-    def separator_cb(data):
-        if data['state'] != 'start':
-            return
-        progress = data['segment_offset'] / data['audio_length']
-        if progress_cb:
-            progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS + (progress * SEPARATOR_MODEL_PROGRESS))
-    
-    separator.update_parameter(callback=separator_cb)
-
-    origin, separated = separator.separate_audio_file(audioinput)
-    vocals = separated['vocals']
-    inst = origin - vocals
-
-    silence1 = torch.zeros([2, start_silence * separator.samplerate])
-    silence2 = torch.zeros([2, end_silence * separator.samplerate])
-
-    inst = torch.cat((silence1, inst, silence2), dim=-1)
-    
-    if progress_cb:
-        progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS + SEPARATOR_MODEL_PROGRESS)
-
-    if output_vocals:
-        vocals = torch.cat((silence1, vocals, silence2), dim=-1)
-        vocals, silence_marks = filter_silence(vocals, separator.samplerate)
-        demucs.api.save_audio(vocals, output_vocals, samplerate=separator.samplerate)
-    else:
-        silence_marks = [(0, start_silence)]
-
-    demucs.api.save_audio(inst, output_inst, samplerate=separator.samplerate)
-    
-    if progress_cb:
-        progress_cb(1.0)
-        
-    return silence_marks
         
 def run_process(*args):
     process = subprocess.run(args, capture_output=True)
@@ -624,8 +521,11 @@ def try_remove(path):
     except FileNotFoundError:
         pass
 
-def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, **_):
+def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals_in_inst=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, **_):
     global whisper_model_framework
+    
+    if not transcribe_using_vocals and transcribe_with_backup_vocals:
+        raise ValueError('transcribe_with_backup_vocals implies transcribe_using_vocals')
     
     if progress_cb:
         progress_cb(0.0)
@@ -652,7 +552,14 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, remov
         extract_audio(inputpath, audiopath)
         
         silence = 0 # TODO video title
-        silence_marks = instrumental(audiopath, instpath, output_vocals=vocalspath, start_silence=silence, end_silence=silence, progress_cb=instrumental_progress_cb)
+        silence_marks = instrumental.instrumental(audiopath,
+                                                    instpath,
+                                                    output_vocals=vocalspath,
+                                                    output_inst_with_backup=backup_vocals_in_inst,
+                                                    output_vocals_with_backup=transcribe_with_backup_vocals,
+                                                    start_silence=silence,
+                                                    end_silence=silence,
+                                                    progress_cb=instrumental_progress_cb)
 
         if transcribe_using_vocals:
             #vocals already have silence accounted for
@@ -710,7 +617,7 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
         instpath = replace_ext(mp4_input, '_inst.mp3')
         extract_audio(mp4_input, audiopath)
         
-        instrumental(audiopath, instpath, progress_cb=instrumental_progress_cb)
+        instrumental.instrumental(audiopath, instpath, output_inst_with_backup=True, progress_cb=instrumental_progress_cb)
         
         if blank_video:
             audio_with_blank(instpath, output_path)

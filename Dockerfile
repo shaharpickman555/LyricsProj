@@ -36,6 +36,9 @@ RUN pip install --no-cache-dir -U \
     faster-whisper \
     dora-search \
     einops \
+    librosa \
+    beartype \
+    rotary_embedding_torch \
     julius \
     lameenc \
     openunmix \
@@ -48,5 +51,4 @@ RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=dem
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 COPY ffmpeg .
 EXPOSE 8000
-EXPOSE 22
 CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; git pull origin main; pip install -U yt-dlp; exec python frontend.py"]
