@@ -12,6 +12,7 @@ RUN apt update && apt install -y --no-install-recommends \
     ffmpeg \
     vim \
     git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rm -f /opt/conda/bin/ffmpeg
@@ -51,4 +52,4 @@ RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=dem
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 COPY ffmpeg .
 EXPOSE 8000
-CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; git pull origin main; pip install -U yt-dlp; exec python frontend.py"]
+CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; git pull origin main; pip install -U yt-dlp; wget -nc -O mel_band_roformer/mel_band_roformer_karaoke_becruily.ckpt https://huggingface.co/becruily/mel-band-roformer-karaoke/resolve/main/mel_band_roformer_karaoke_becruily.ckpt; exec python frontend.py"]
