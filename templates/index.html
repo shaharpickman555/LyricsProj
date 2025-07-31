@@ -364,21 +364,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const el = document.getElementById("playlist");
     el.innerHTML = "";
     pl.forEach((job, i) => {
+      const safe      = job.title.replace(/"/g,"&quot;");
+      const uploader  = localStorage.getItem("karaokeNickname") || "";
+      const thumbnail = job.info?.thumbnail || "";
+      
       const li = document.createElement("li");
       li.dataset.index = i;
       li.className = "list-group-item d-flex justify-content-between align-items-center";
-      if (job.is_playing) li.classList.add("playing-song");
+      if (job.is_playing) {
+        li.classList.add("playing-song");
+      }
       let html = `<span class="drag-handle">☰</span><div class="flex-grow-1 text-start">
         <span class="title">${job.is_playing?"🎵 ":""}${job.title}</span>
         <span class="status">${getStatusIcon(job.status)}</span>`;
+      if (thumbnail.length > 0) {
+        html += `<div class="mt-2"><img class="song-thumbnail" src="${thumbnail}" /></div>`
+      }
       if (job.status==="processing") {
         const pct = Math.round((job.progress||0)*100);
         html += `<div class="progress mt-2"><div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">${pct}%</div></div>`;
       }
       html += `</div>`;
-      const safe      = job.title.replace(/"/g,"&quot;");
-      const uploader  = localStorage.getItem("karaokeNickname") || "";
-      const thumbnail = job.info?.thumbnail || "";
+
       html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
                 data-title="${safe}"
                 data-url="${job.url||""}"
