@@ -51,5 +51,10 @@ RUN pip install ctranslate2 -U
 RUN pip install --no-deps git+https://github.com/facebookresearch/demucs#egg=demucs
 RUN git clone https://github.com/shaharpickman555/LyricsProj.git .
 COPY ffmpeg .
+COPY mel_band_roformer_karaoke_becruily.ckpt mel_band_roformer/
+COPY mel_band_roformer_vocals_becruily.ckpt mel_band_roformer/
 EXPOSE 8000
-CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; git pull origin main; pip install -U yt-dlp; wget -nc -O mel_band_roformer/mel_band_roformer_karaoke_becruily.ckpt https://huggingface.co/becruily/mel-band-roformer-karaoke/resolve/main/mel_band_roformer_karaoke_becruily.ckpt; exec python frontend.py"]
+CMD ["sh", "-c", "export LD_LIBRARY_PATH=/opt/conda/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH; \
+git pull origin main; \
+pip install -U yt-dlp; \
+exec python frontend.py"]

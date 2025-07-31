@@ -6,14 +6,21 @@ import torchaudio
 import demucs.api
 from mel_band_roformer import MelBandRoformer
 
-LOAD_SEPARATOR_MODEL_PROGRESS = 0.1
-SEPARATOR_MODEL_PROGRESS = 0.9 #10% load, 90% process
+LOAD_DEMUCS_MODEL_PROGRESS = 0.1
+DEMUCS_MODEL_PROGRESS = 0.9 #10% load, 90% process
 
 LOAD_ROFORMER_MODEL_PROGRESS = 0.1
 ROFORMER_MODEL_PROGRESS = 0.9
 
-DEMUCS_PROGRESS = 0.2
-ROFORMER_PROGRESS = 0.7
+vocals_use_roformer = True
+
+if not vocals_use_roformer:
+    VOCALS_PROGRESS = 0.2
+    KAREOKE_PROGRESS = 0.7
+else:
+    VOCALS_PROGRESS = 0.45
+    KAREOKE_PROGRESS = 0.45
+    
 SAVE_PROGRESS = 0.1
 
 selfdir = Path(__file__).parent
@@ -39,12 +46,12 @@ def demucs_demix(audioinput, progress_cb=None):
             return
         progress = data['segment_offset'] / data['audio_length']
         if progress_cb:
-            progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS + (progress * SEPARATOR_MODEL_PROGRESS))
+            progress_cb(LOAD_DEMUCS_MODEL_PROGRESS + (progress * DEMUCS_MODEL_PROGRESS))
         
     separator = load_separator()
     
     if progress_cb:
-        progress_cb(LOAD_SEPARATOR_MODEL_PROGRESS)
+        progress_cb(LOAD_DEMUCS_MODEL_PROGRESS)
     
     separator.update_parameter(callback=separator_cb)
     
@@ -60,29 +67,62 @@ def demucs_demix(audioinput, progress_cb=None):
     
 ####roformer####
 
-model_dir = selfdir / 'mel_band_roformer'
-config_file = model_dir / 'config_karaoke_becruily.yaml'
-model_ckpt = model_dir / 'mel_band_roformer_karaoke_becruily.ckpt'
-
 kareoke_roformer_overlap = 1.2 #lower is faster, linearly
+vocals_roformer_overlap = 1.2 #lower is faster, linearly
+
+roformer_model_dir = selfdir / 'mel_band_roformer'
+kareoke_config_file = roformer_model_dir / 'config_karaoke_becruily.yaml'
+kareoke_model_ckpt = roformer_model_dir / 'mel_band_roformer_karaoke_becruily.ckpt'
 
 kareoke_roformer_model = None
 kareoke_roformer_chunk_size = None
 kareoke_roformer_instruments = None
 kareoke_roformer_sample_rate = None
+
+vocals_config_file = roformer_model_dir / 'config_vocals_becruily.yaml'
+vocals_model_ckpt = roformer_model_dir / 'mel_band_roformer_vocals_becruily.ckpt'
+
+vocals_roformer_model = None
+vocals_roformer_chunk_size = None
+vocals_roformer_instruments = None
+vocals_roformer_sample_rate = None
+
+def prepare_vocals_ckpt(vocal_ckpt, kareoke_ckpt, output_ckpt):
+    vo = torch.load(vocal_ckpt, map_location=device, weights_only=True)
+    ka = torch.load(kareoke_ckpt, map_location=device, weights_only=True)
+    
+    #take estimator
+    for k,v in ka.items():
+        if k.startswith('mask_estimators.'):
+            vo[k] = v
+            
+    torch.save(vo, output_ckpt)
+
+def load_roformer(config_path, ckpt):
+    with open(kareoke_config_file, 'r', encoding='utf8') as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        
+    chunk_size = config['audio']['chunk_size']
+    instruments = config['training']['instruments']
+    sample_rate = config['audio']['sample_rate']
+    model = MelBandRoformer(**(config['model'])).to(device)
+    model.load_state_dict(torch.load(ckpt, map_location=device, weights_only=True))
+    
+    return model, chunk_size, instruments, sample_rate
+
 def load_kareoke_roformer():
     global kareoke_roformer_model, kareoke_roformer_chunk_size, kareoke_roformer_instruments, kareoke_roformer_sample_rate
     if kareoke_roformer_model is None:
-        with open(config_file, 'r', encoding='utf8') as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        
-        kareoke_roformer_chunk_size = config['audio']['chunk_size']
-        kareoke_roformer_instruments = config['training']['instruments']
-        kareoke_roformer_sample_rate = config['audio']['sample_rate']
-        kareoke_roformer_model = MelBandRoformer(**(config['model'])).to(device)
-        kareoke_roformer_model.load_state_dict(torch.load(model_ckpt, map_location=device, weights_only=True))
+        kareoke_roformer_model, kareoke_roformer_chunk_size, kareoke_roformer_instruments, kareoke_roformer_sample_rate = load_roformer(kareoke_config_file, kareoke_model_ckpt)
         
     return kareoke_roformer_model, kareoke_roformer_chunk_size, kareoke_roformer_instruments, kareoke_roformer_sample_rate, kareoke_roformer_overlap
+    
+def load_vocals_roformer():
+    global vocals_roformer_model, vocals_roformer_chunk_size, vocals_roformer_instruments, vocals_roformer_sample_rate
+    if vocals_roformer_model is None:
+        vocals_roformer_model, vocals_roformer_chunk_size, vocals_roformer_instruments, vocals_roformer_sample_rate = load_roformer(vocals_config_file, vocals_model_ckpt)
+        
+    return vocals_roformer_model, vocals_roformer_chunk_size, vocals_roformer_instruments, vocals_roformer_sample_rate, vocals_roformer_overlap
 
 def get_windowing_array(window_size, fade_size):
     fadein = torch.linspace(0, 1, fade_size)
@@ -175,8 +215,11 @@ def roformer_demix(path, load_func, num_overlap=None, progress_cb=None):
         progress_cb(1.0)
     
     results = estimated_sources.unbind(0)
+    
+    #find vocals index
+    vocals_index = [(i, v) for i,v in enumerate(instruments) if 'vocal' in v.lower()][0][0]
     # vocals last
-    if instruments.index('Vocals') == 0:
+    if vocals_index == 0:
         results = results[::-1]
         
     return *results, model_samplerate
@@ -236,32 +279,35 @@ def instrumental(audioinput, output_inst, output_vocals=None, output_inst_with_b
     if progress_cb:
         progress_cb(0.0)
         
-    def demucs_progress(progress):
+    def vocals_progress(progress):
         if progress_cb:
-            progress_cb(progress * DEMUCS_PROGRESS)
+            progress_cb(progress * VOCALS_PROGRESS)
     
-    def roformer_progress(progress):
+    def kareoke_progress(progress):
         if progress_cb:
-            progress_cb(DEMUCS_PROGRESS + (progress * ROFORMER_PROGRESS))
+            progress_cb(VOCALS_PROGRESS + (progress * KAREOKE_PROGRESS))
     
     if not output_inst_with_backup or (output_vocals is not None and output_vocals_with_backup):
-        print('doing demucs')
-        inst_without_backing, vocals_with_backing, d_samplerate = demucs_demix(audioinput, progress_cb=demucs_progress)
+        print('doing vocal separation')
+        if vocals_use_roformer:
+            inst_without_backing, vocals_with_backing, d_samplerate = roformer_demix(audioinput, load_func=load_vocals_roformer, progress_cb=vocals_progress)
+        else:
+            inst_without_backing, vocals_with_backing, d_samplerate = demucs_demix(audioinput, progress_cb=vocals_progress)
     else:
         # not needed
-        print('skipping demucs')
+        print('skipping vocal separation')
         inst_without_backing, vocals_with_backing, d_samplerate = None, None, None
         
     if output_inst_with_backup or (output_vocals is not None and not output_vocals_with_backup):
-        print('doing roformer')
-        inst_with_backing, vocals_without_backing, r_samplerate = roformer_demix(audioinput, load_func=load_kareoke_roformer, progress_cb=roformer_progress)
+        print('doing kareoke separation')
+        inst_with_backing, vocals_without_backing, r_samplerate = roformer_demix(audioinput, load_func=load_kareoke_roformer, progress_cb=kareoke_progress)
     else:
         # not needed
-        print('skipping roformer')
+        print('skipping kareoke separation')
         inst_with_backing, vocals_without_backing, r_samplerate = None, None, None
     
     if progress_cb:
-        progress_cb(DEMUCS_PROGRESS + ROFORMER_PROGRESS)
+        progress_cb(VOCALS_PROGRESS + KAREOKE_PROGRESS)
         
     if d_samplerate is not None and r_samplerate is not None and d_samplerate != r_samplerate:
         # match sample rates
@@ -296,12 +342,13 @@ def instrumental(audioinput, output_inst, output_vocals=None, output_inst_with_b
     return silence_marks
 
 def main(argv):
+    #prepare_vocals_ckpt(roformer_model_dir / 'orig_mel_band_roformer_vocals_becruily.ckpt', kareoke_model_ckpt, vocals_model_ckpt)
     def prog(progress):
         print(f'progress: {progress}')
         
-    load_kareoke_roformer()
+    load_vocals_roformer()
     start = time.time()
-    vocals, inst, samplerate = roformer_demix(argv[1], load_func=load_kareoke_roformer, progress_cb=prog)
+    inst, vocals, samplerate = roformer_demix(argv[1], load_func=load_vocals_roformer, progress_cb=prog)
     end = time.time()
     print(end - start)
     
