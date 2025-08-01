@@ -504,6 +504,10 @@ def is_video_audio(input):
     output_video = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
     output_audio = run_process('ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
     return 'video' in output_video, 'audio' in output_audio
+    
+def video_resolution(input):
+    output_res = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=s=x:p=0', input)
+    return tuple(int(n) for n in output_res.split('x'))
         
 def extract_audio(input, output_audio):
     run_process(ffmpeg_path, '-y', '-i', input, '-vn', output_audio)
@@ -511,11 +515,45 @@ def extract_audio(input, output_audio):
 def audio_with_blank(audiopath, outputpath, subtitles_path=None):
     run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
 
-def video_with_audio(videopath, audiopath, outputpath, subtitles_path=None):
-    codec_options = ['-vcodec', 'h264_nvenc']
-    #codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
-    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex', f"[0:v]scale='max(720, iw)':-2[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]" if subtitles_path else "scale='max(720, iw)':-2[v]", '-map', '[v]:v', '-map', '1:a', *codec_options, outputpath)
+video_codec_options = ['-vcodec', 'h264_nvenc']
+#video_codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
+    
+def video_with_audio(videopath, audiopath, outputpath, max_width=1080):
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
+                '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex', 
+                f'scale=max({max_width}\\, iw):-2[v]', '-map', '[v]:v', '-map', '1:a', 
+                *video_codec_options, outputpath)
+    
+def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_path, h_to_w_ratio=9/16, min_width=1080):
+    w, h = video_resolution(videopath)
+    
+    #scale to min_width
+    if w < min_width:
+        h = min_width * h / w
+        w = min_width
+        
+    #fit to ratio
+    if (h / w) < h_to_w_ratio:
+        h = h_to_w_ratio * w
+    else:
+        w = h / h_to_w_ratio
+        
+    w, h = round(w), round(h)
+        
+    #make even
+    if h % 2 != 0:
+        h += 1
+    if w % 2 != 0:
+        w += 1
+        
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
+                '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex',
+                f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]',
+                '-map', '[v]:v', '-map', '1:a', *video_codec_options, outputpath)
 
+def reencode_video(videopath, outputpath):
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-c:v', 'copy', *video_codec_options, outputpath)
+    
 def try_remove(path):
     try:
         os.remove(path)
@@ -593,7 +631,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
         if blank_video:
             audio_with_blank(output_audio_path, outputpath, asspath)
         else:
-            video_with_audio(inputpath, output_audio_path, outputpath, asspath)
+            video_with_audio_and_subtitles(inputpath, output_audio_path, outputpath, subtitles_path=asspath)
     finally:
         if remove_intermediates:
             try_remove(audiopath)
@@ -639,7 +677,7 @@ def passthrough(input, output, progress_cb=None, blank_video=False, **_):
     if blank_video:
         audio_with_blank(input, output)
     else:
-        run_process(ffmpeg_path, '-y', '-i', input, '-c:v', 'copy', '-vcodec', 'h264', output)
+        reencode_video(input, output)
     
     if progress_cb:
         progress_cb(1.0)
