@@ -110,16 +110,15 @@
   </template>
 
   <script>
-    /* ---------- socket.IO (original flow) ------------------- */
-    const socket = io();
-    const roomId = "{{ room_id }}";
-    socket.on('connect', () => socket.emit("join_room", { room_id: roomId }));
+document.addEventListener("DOMContentLoaded", () => {
+  const socket = io(), roomId = "{{ room_id }}";
 
     const cont = document.getElementById("player-container");
     let currentSrc = "";
 
+	
     /* ---------- helpers ------------------------------------ */
-    const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
+const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
 
     /**  Injects the custom player markup & behaviour  */
     function injectPlayer(src){
@@ -157,17 +156,19 @@
       prog.oninput = e => vid.currentTime = +e.target.value;
 
       /* -------- play / pause ------------ */
-      const togglePlay = ()=> vid.paused ? vid.play() : vid.pause();
+      const togglePlay=()=>vid.paused?vid.play():vid.pause();
       playBt.onclick = togglePlay;
       vid.onclick    = togglePlay;
       vid.onplay  = ()=> playBt.textContent="⏸";
       vid.onpause = ()=> playBt.textContent="▶";
 
       /* -------- volume (simple cycle) --- */
-      const levels=[1,0.4,0.2,0];const icons=["🔊","🔉","🔈","🔇"];let i=0;
+      const levels=[1,0.4,0.2,0];
+	  const icons=["🔊","🔉","🔈","🔇"];
+	  let vi=0;
       applyVol();
-      volBt.onclick=()=>{i=(i+1)%levels.length;applyVol();};
-      function applyVol(){vid.volume=levels[i];vid.muted=(vid.volume===0);volBt.textContent=icons[i];}
+      volBt.onclick=()=>{vi=(vi+1)%levels.length;applyVol();};
+      function applyVol(){ vid.volume=levels[vi]; vid.muted=vid.volume===0; volBt.textContent=icons[vi]; }
 
       /* -------- fullscreen control ------ */
       const reqFull = el => (el.requestFullscreen||el.webkitRequestFullscreen||
@@ -181,7 +182,8 @@
       vid.ondblclick = ()=> toggleFull(cont);
 
       /* -------- QR visibility ----------- */
-      let qrVisible=false;updateQR();
+      let qrVisible=false;
+	  updateQR();
       qrBt.onclick = ()=>{qrVisible=!qrVisible;updateQR();};
       function updateQR(){qrBox.style.display=qrVisible?"block":"none";qrBt.textContent=qrVisible?"Hide QR":"Show QR";}
 
@@ -195,7 +197,7 @@
         bar.classList.remove("hideFS");
         if(isFS()){resetHide();}
       }
-      function hideBar(){bar.classList.add("hideFS");}
+      function hideBar(){ bar.classList.add("hideFS"); }
       function resetHide(){
         clearTimeout(hideTimer);
         hideTimer=setTimeout(()=>{ if(isFS()) hideBar(); },3000);
@@ -213,9 +215,9 @@
         if(inFS) resetHide();
       }
       document.addEventListener("fullscreenchange",handleFSChange);
-      document.addEventListener("webkitfullscreenchange",handleFSChange);
-      document.addEventListener("mozfullscreenchange",handleFSChange);
-      document.addEventListener("MSFullscreenChange",handleFSChange);
+      document.addEventListener("webkitfullscreenchange", handleFSChange);
+      document.addEventListener("mozfullscreenchange", handleFSChange);
+      document.addEventListener("MSFullscreenChange", handleFSChange);
 
       /* ---- Next song ---------- */
       nextBt.onclick = triggerNext;
@@ -224,6 +226,7 @@
     }
 
     /* ---------- server push ------------------------------- */
+	socket.on("connect", () => socket.emit("join_room", { room_id: roomId }));
     socket.on("player_updated", data=>{
       if(data.current_song){
         if(data.current_song !== currentSrc) injectPlayer(data.current_song);
@@ -251,6 +254,7 @@
       fetch(`/next_song/${roomId}`,{method:"POST"})
         .catch(err=>console.error("next_song error",err));
     }
+});
   </script>
 </body>
 </html>

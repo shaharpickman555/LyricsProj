@@ -157,17 +157,24 @@
 
   <template id="playerTemplate">
     <video id="videoPlayer" autoplay playsinline></video>
-    <div id="qrMark"><img src="/qr_inv?data={{ url_for('singlemode_room', room_id=room_id, _external=True) }}" alt="QR code"></div>
+
+    <div id="qrMark">
+      <img src="/qr_inv?data={{ url_for('singlemode_room', room_id=room_id, _external=True) }}"
+           alt="QR code">
+    </div>
+
     <div class="vjs-bar">
-      <span id="btnPlay" class="vjs-btn" title="Play / Pause">⏸</span>
+      <span id="btnPlay"  class="vjs-btn" title="Play / Pause">⏸</span>
+
       <input id="vProgress" type="range" min="0" value="0" step="0.1">
-      <span id="timeLabel" style="width:115px;text-align:right">0:00 / 0:00</span>
+      <span id="timeLabel" style="width:115px;text-align:right">0:00&nbsp;/&nbsp;0:00</span>
+
       <div class="right-group">
-        <span id="btnVol" class="vjs-btn" title="Volume">🔊</span>
+        <span id="btnVol"  class="vjs-btn" title="Volume">🔊</span>
         <span id="btnNext" class="vjs-btn" title="Next song">⏭</span>
-        <a id="btnDL" class="vjs-btn" title="Download">⬇</a>
-        <span id="btnQR" class="vjs-btn" title="Show / hide QR">Show QR</span>
-        <span id="btnFS" class="vjs-btn" title="Fullscreen">⤢</span>
+        <a   id="btnDL"   class="vjs-btn" title="Download">⬇</a>
+        <span id="btnQR"   class="vjs-btn" title="Show / hide QR">Show&nbsp;QR</span>
+        <span id="btnFS"   class="vjs-btn" title="Fullscreen">⤢</span>
       </div>
     </div>
   </template>
@@ -202,7 +209,7 @@
   </div></div>
 </div>
 
-<script>
+  <script>
 document.addEventListener("DOMContentLoaded", () => {
   const socket = io(), roomId = "{{ room_id }}";
   const pageTitle = document.getElementById("pageTitle");
@@ -227,8 +234,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper);
   const searchWrapper = document.getElementById("ytSearchWrapper");
   const searchTooltip = bootstrap.Tooltip.getOrCreateInstance(searchWrapper);
-  const cont               = document.getElementById("player-container");
-  let currentSrc = "";
+    const cont = document.getElementById("player-container");
+    let currentSrc = "";
 
   document.querySelectorAll('#addSongForm label[data-bs-toggle="tooltip"]').forEach(el => {
     bootstrap.Tooltip.getOrCreateInstance(el);
@@ -566,67 +573,143 @@ document.addEventListener("DOMContentLoaded", () => {
     function getStatusIcon(s){
       return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s;
     }
+	
+    /* ---------- helpers ------------------------------------ */
+const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
 
+    /**  Injects the custom player markup & behaviour  */
     function injectPlayer(src){
-      currentSrc=src; cont.style.background="#000";
-      cont.innerHTML=document.getElementById("playerTemplate").innerHTML;
-      const vid=cont.querySelector("#videoPlayer"),
-            playBt=cont.querySelector("#btnPlay"),
-            nextBt=cont.querySelector("#btnNext"),
-            fsBt=cont.querySelector("#btnFS"),
-            qrBt=cont.querySelector("#btnQR"),
-            qrBox=cont.querySelector("#qrMark"),
-            prog=cont.querySelector("#vProgress"),
-            label=cont.querySelector("#timeLabel"),
-            volBt=cont.querySelector("#btnVol"),
-            dlBt=cont.querySelector("#btnDL"),
-            bar=cont.querySelector(".vjs-bar");
-      vid.src="/"+src; dlBt.href="/"+src; dlBt.download=src.split('/').pop();
-      vid.addEventListener("loadedmetadata",()=>{ prog.max=vid.duration; label.textContent=`0:00 / ${toHMS(vid.duration)}`; });
-      vid.addEventListener("timeupdate",()=>{ prog.value=vid.currentTime; label.textContent=`${toHMS(vid.currentTime)} / ${toHMS(vid.duration)}`; });
-      prog.oninput=e=>vid.currentTime=+e.target.value;
+      currentSrc = src;
+      cont.style.background="#000";
+      cont.innerHTML = document.getElementById("playerTemplate").innerHTML;
+
+      const vid    = cont.querySelector("#videoPlayer");
+      const playBt = cont.querySelector("#btnPlay");
+      const nextBt = cont.querySelector("#btnNext");
+      const fsBt   = cont.querySelector("#btnFS");
+      const qrBt   = cont.querySelector("#btnQR");
+      const qrBox  = cont.querySelector("#qrMark");
+      const prog   = cont.querySelector("#vProgress");
+      const label  = cont.querySelector("#timeLabel");
+      const volBt  = cont.querySelector("#btnVol");
+      const dlBt   = cont.querySelector("#btnDL");
+      const bar    = cont.querySelector(".vjs-bar");
+
+      /* -------- video src --------------- */
+      vid.src = "/"+src;
+      dlBt.href = "/"+src;
+      dlBt.download = src.split('/').pop();
+
+      /* -------- timeline  --------------- */
+      vid.addEventListener("loadedmetadata",()=>{
+        prog.max = vid.duration;
+        label.textContent = `0:00 / ${toHMS(vid.duration)}`;
+      });
+      vid.addEventListener("timeupdate",()=>{
+        prog.value = vid.currentTime;
+        label.textContent =
+          `${toHMS(vid.currentTime)} / ${toHMS(vid.duration)}`;
+      });
+      prog.oninput = e => vid.currentTime = +e.target.value;
+
+      /* -------- play / pause ------------ */
       const togglePlay=()=>vid.paused?vid.play():vid.pause();
-      playBt.onclick=togglePlay; vid.onclick=togglePlay; vid.onplay=()=>playBt.textContent="⏸"; vid.onpause=()=>playBt.textContent="▶";
-      const levels=[1,0.4,0.2,0], icons=["🔊","🔉","🔈","🔇"]; let vi=0;
-      applyVol(); volBt.onclick=()=>{vi=(vi+1)%levels.length;applyVol();};
+      playBt.onclick = togglePlay;
+      vid.onclick    = togglePlay;
+      vid.onplay  = ()=> playBt.textContent="⏸";
+      vid.onpause = ()=> playBt.textContent="▶";
+
+      /* -------- volume (simple cycle) --- */
+      const levels=[1,0.4,0.2,0];
+	  const icons=["🔊","🔉","🔈","🔇"];
+	  let vi=0;
+      applyVol();
+      volBt.onclick=()=>{vi=(vi+1)%levels.length;applyVol();};
       function applyVol(){ vid.volume=levels[vi]; vid.muted=vid.volume===0; volBt.textContent=icons[vi]; }
-      function isFS(){ return (document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement)===cont; }
-      function reqFull(el){ (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen).call(el); }
-      function exitFull(){ (document.exitFullscreen||document.webkitExitFullscreen||document.mozCancelFullScreen||document.msExitFullscreen).call(document); }
-      function toggleFull(el){ isFS()?exitFull():reqFull(el); }
-      fsBt.onclick=()=>toggleFull(cont); vid.ondblclick=()=>toggleFull(cont);
-      let qrVisible=false; qrBt.onclick=()=>{ qrVisible=!qrVisible; updateQR(); };
-      function updateQR(){ qrBox.style.display=qrVisible?"block":"none"; qrBt.textContent=qrVisible?"Hide QR":"Show QR"; }
-      let hideTimer=null; function showBar(){ bar.classList.remove("hideFS"); if(isFS()) resetHide(); }
+
+      /* -------- fullscreen control ------ */
+      const reqFull = el => (el.requestFullscreen||el.webkitRequestFullscreen||
+                             el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
+      const exitFull= () => (document.exitFullscreen||document.webkitExitFullscreen||
+                             document.mozCancelFullScreen||document.msExitFullscreen).call(document);
+      const toggleFull = el =>
+        document.fullscreenElement ? exitFull() : reqFull(el);
+
+      fsBt.onclick   = ()=> toggleFull(cont);
+      vid.ondblclick = ()=> toggleFull(cont);
+
+      /* -------- QR visibility ----------- */
+      let qrVisible=false;
+	  updateQR();
+      qrBt.onclick = ()=>{qrVisible=!qrVisible;updateQR();};
+      function updateQR(){qrBox.style.display=qrVisible?"block":"none";qrBt.textContent=qrVisible?"Hide QR":"Show QR";}
+
+      /* -------- toolbar auto‑hide ------- */
+      let hideTimer=null;
+      function isFS(){
+        return (document.fullscreenElement||document.webkitFullscreenElement||
+                document.mozFullScreenElement||document.msFullscreenElement) === cont;
+      }
+      function showBar(){
+        bar.classList.remove("hideFS");
+        if(isFS()){resetHide();}
+      }
       function hideBar(){ bar.classList.add("hideFS"); }
-      function resetHide(){ clearTimeout(hideTimer); hideTimer=setTimeout(()=>{ if(isFS()) hideBar(); },3000); }
-      document.addEventListener("mousemove", showBar);
-      document.addEventListener("keydown", showBar);
-      document.addEventListener("fullscreenchange", handleFSChange);
+      function resetHide(){
+        clearTimeout(hideTimer);
+        hideTimer=setTimeout(()=>{ if(isFS()) hideBar(); },3000);
+      }
+      // User activity listeners
+      document.addEventListener("mousemove",showBar);
+      document.addEventListener("keydown",showBar);
+
+      // FS state changes
+      function handleFSChange(){
+        const inFS=isFS();
+        qrVisible=inFS; updateQR();
+        bar.classList.remove("hideFS");
+        clearTimeout(hideTimer);
+        if(inFS) resetHide();
+      }
+      document.addEventListener("fullscreenchange",handleFSChange);
       document.addEventListener("webkitfullscreenchange", handleFSChange);
       document.addEventListener("mozfullscreenchange", handleFSChange);
       document.addEventListener("MSFullscreenChange", handleFSChange);
-      function handleFSChange(){ const inFS=isFS(); qrVisible=inFS; updateQR(); bar.classList.remove("hideFS"); clearTimeout(hideTimer); if(inFS) resetHide(); }
-      nextBt.onclick=triggerNext; vid.onended=triggerNext; function triggerNext(){ doNextSong(); }
-    }
 
-    function toHMS(s){ return `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`; }
+      /* ---- Next song ---------- */
+      nextBt.onclick = triggerNext;
+      vid.onended    = triggerNext;
+      function triggerNext(){ doNextSong(); }
+    }
 
     socket.on("player_updated", data=>{
       if(data.current_song){
-        if(data.current_song!==currentSrc) injectPlayer(data.current_song);
-      } else {
-        currentSrc=""; cont.style.background="#fff"; cont.innerHTML=`<p class="empty-msg">${data.in_process?"No songs are done yet; waiting on processing.":"No songs available to play."}</p>`;
+        if(data.current_song !== currentSrc) injectPlayer(data.current_song);
+      }else{
+        currentSrc="";
+        cont.style.background="#fff";
+        cont.innerHTML =
+          `<p class="empty-msg text-muted">${
+            data.in_process ?
+              "No songs are done yet; waiting on processing." :
+              "No songs available to play."
+          }</p>`;
       }
     });
 
+    /* ---------- initial render ---------------------------- */
     {% if current_song %}
       injectPlayer("{{ current_song.out_path }}");
     {% else %}
-      cont.innerHTML='<p class="empty-msg">No songs available to play.</p>';
+      cont.innerHTML='<p class="empty-msg text-muted">No songs available to play.</p>';
     {% endif %}
-	
-	});
+
+    /* ---------- helper ------------------------------------ */
+    function doNextSong(){
+      fetch(`/next_song/${roomId}`,{method:"POST"})
+        .catch(err=>console.error("next_song error",err));
+    }
+});
   </script>
 </body>
 </html>
