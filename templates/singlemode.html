@@ -41,19 +41,73 @@
       display: block;
       margin-bottom: 1rem;
     }
-    .vjs-bar.hideFS { opacity: 0; pointer-events: none; }
-    .vjs-btn { cursor: pointer; color: inherit; }
-    .vjs-btn:hover { color: #0d6efd; }
+    #player-container {
+      position: relative;
+      background: #fff;
+      border: 1px solid #000;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0;
+    }
+    #videoPlayer {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    /* -------- fullscreen ------- */
+    #player-container:fullscreen,
+    #player-container:-webkit-full-screen,
+    #player-container:-moz-full-screen,
+    #player-container:-ms-fullscreen{
+      background:#000!important;width:100%!important;height:100%!important
+    }
+    #player-container:fullscreen #videoPlayer,
+    #player-container:-webkit-full-screen #videoPlayer,
+    #player-container:-moz-full-screen #videoPlayer,
+    #player-container:-ms-fullscreen #videoPlayer{
+      width:100%!important;height:100%!important;object-fit:contain
+    }
+
+
+
+    /* -------- toolbar ---------- */
+    .vjs-bar{
+      position:absolute;
+	  left:0;
+	  right:0;
+	  bottom:0;
+	  z-index:40;
+      height:44px;
+	  display:flex;
+	  align-items:center;
+	  gap:.8rem;
+      background:rgba(0,0,0,.78);
+	  color:#fff;
+	  padding:0 .8rem;
+      font-size:18px;
+	  user-select:none;
+      transition:opacity .25s;
+    }
+    .vjs-bar.hideFS{opacity:0;pointer-events:none}
+    .vjs-btn{cursor:pointer;text-decoration:none;color:inherit}
+    .vjs-btn:hover{color:#0d6efd}
+    
     #vProgress { flex: 1; height: 4px; appearance: none; background: #555; border-radius: 2px; }
     #vProgress::-webkit-slider-thumb {
       appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #0d6efd;
     }
-    .right-group { display: flex; gap: .9rem; margin-left: auto; }
+    .right-group{display:flex;gap:0.9rem;margin-left:auto}
+
+    /* -------- empty text ------- */
     .empty-msg { padding: 1rem; color: #666; text-align: center; }
+	/* -------- QR watermark ----- */
     #qrMark {
       position: absolute; top: 1.5%; left: 1.5%;
       width: 10%; max-width: 200px; aspect-ratio: 1/1; z-index: 30; display: none;
     }
+	
     #qrMark img { width: 100%; height: 100%; display: block; }
     #nicknameSection { display: none; }
   </style>
@@ -446,6 +500,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const el = document.getElementById("playlist");
     el.innerHTML = "";
     pl.forEach((job, i) => {
+      const safe      = job.title.replace(/"/g,"&quot;");
+      const uploader  = localStorage.getItem("karaokeNickname") || "";
+      const thumbnail = job.info?.thumbnail || "";
       
       const li = document.createElement("li");
       li.dataset.index = i;
@@ -464,10 +521,6 @@ document.addEventListener("DOMContentLoaded", () => {
         html += `<div class="progress mt-2"><div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">${pct}%</div></div>`;
       }
       html += `</div>`;
-        const safe=job.title.replace(/"/g,"&quot;");
-        const uploader=localStorage.getItem("karaokeNickname")||"";
-        const thumbnail=job.info?.thumbnail||"";
-
       html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
                 data-title="${safe}"
                 data-url="${job.url||""}"
