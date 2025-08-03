@@ -286,11 +286,36 @@ document.addEventListener("DOMContentLoaded", () => {
       advBtn.textContent = "Advanced ▼";
     }
   });
+  
+  async function submit(form) {
+    const data = new FormData(form);
+    
+    try {
+        response = await fetch(form.action, {
+            body: data,
+            method: form.method,
+        });
+        
+        if (!response.ok) {
+            alert("Error adding song");
+            console.log("Error adding song", response.status, await response.text());
+        }
+    } catch (e) {
+        alert("Error adding song");
+        console.log("Error adding song", error.message);
+    } finally {   
+        ytInput.value = "";
+        localFileInput.value = "";
+        loadingOverlay.style.display = "none";
+    }
+  }
 
   addSongForm.addEventListener("submit", e => {
     e.preventDefault();
     loadingOverlay.style.display = "flex";
-    addSongForm.submit();
+    //addSongForm.submit();
+    
+    submit(addSongForm);
   });
 
   ytSearchBtn.addEventListener("click", performYtSearch);

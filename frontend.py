@@ -126,11 +126,6 @@ def add_song(room_id):
     data = get_validated_room(room_id)
     if data is None:
         return custom_not_found()
-    mode = request.args.get("mode", "")
-    if mode == "singlemode":
-        redirect_string = "singlemode_room"
-    else:
-        redirect_string = "index"
     youtube_url = request.form.get("youtube_url", "").strip().split('&')[0]
     local_file = request.files.get("local_file")
     keep_val = request.form.get("keep", "nothing")
@@ -151,18 +146,18 @@ def add_song(room_id):
         local_file.save(path)
         job_params["path"] = path
     else:
-        return redirect(url_for(redirect_string, room_id=room_id))
+        return make_response('Wrong data', 400)
 
     try:
         job = Job(**job_params)
     except Exception as e:
         flash(f"Error creating job: {str(e)}", "danger")
-        return redirect(url_for(redirect_string, room_id=room_id))
+        return make_response('Error', 500)
 
     data["playlist"].append(job)
     set_queue(data["playlist"])
     socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
-    return redirect(url_for(redirect_string, room_id=room_id))
+    return 'Ok', 200
 
 @app.route("/restore_song/<room_id>", methods=["POST"])
 def restore_song(room_id):
