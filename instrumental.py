@@ -16,10 +16,10 @@ vocals_use_roformer = True
 
 if not vocals_use_roformer:
     VOCALS_PROGRESS = 0.2
-    KAREOKE_PROGRESS = 0.7
+    KARAOKE_PROGRESS = 0.7
 else:
     VOCALS_PROGRESS = 0.45
-    KAREOKE_PROGRESS = 0.45
+    KARAOKE_PROGRESS = 0.45
     
 SAVE_PROGRESS = 0.1
 
@@ -67,17 +67,17 @@ def demucs_demix(audioinput, progress_cb=None):
     
 ####roformer####
 
-kareoke_roformer_overlap = 1.2 #lower is faster, linearly
+karaoke_roformer_overlap = 1.2 #lower is faster, linearly
 vocals_roformer_overlap = 1.2 #lower is faster, linearly
 
 roformer_model_dir = selfdir / 'mel_band_roformer'
-kareoke_config_file = roformer_model_dir / 'config_karaoke_becruily.yaml'
-kareoke_model_ckpt = roformer_model_dir / 'mel_band_roformer_karaoke_becruily.ckpt'
+karaoke_config_file = roformer_model_dir / 'config_karaoke_becruily.yaml'
+karaoke_model_ckpt = roformer_model_dir / 'mel_band_roformer_karaoke_becruily.ckpt'
 
-kareoke_roformer_model = None
-kareoke_roformer_chunk_size = None
-kareoke_roformer_instruments = None
-kareoke_roformer_sample_rate = None
+karaoke_roformer_model = None
+karaoke_roformer_chunk_size = None
+karaoke_roformer_instruments = None
+karaoke_roformer_sample_rate = None
 
 vocals_config_file = roformer_model_dir / 'config_vocals_becruily.yaml'
 vocals_model_ckpt = roformer_model_dir / 'mel_band_roformer_vocals_becruily.ckpt'
@@ -87,9 +87,9 @@ vocals_roformer_chunk_size = None
 vocals_roformer_instruments = None
 vocals_roformer_sample_rate = None
 
-def prepare_vocals_ckpt(vocal_ckpt, kareoke_ckpt, output_ckpt):
+def prepare_vocals_ckpt(vocal_ckpt, karaoke_ckpt, output_ckpt):
     vo = torch.load(vocal_ckpt, map_location=device, weights_only=True)
-    ka = torch.load(kareoke_ckpt, map_location=device, weights_only=True)
+    ka = torch.load(karaoke_ckpt, map_location=device, weights_only=True)
     
     #take estimator
     for k,v in ka.items():
@@ -99,7 +99,7 @@ def prepare_vocals_ckpt(vocal_ckpt, kareoke_ckpt, output_ckpt):
     torch.save(vo, output_ckpt)
 
 def load_roformer(config_path, ckpt):
-    with open(kareoke_config_file, 'r', encoding='utf8') as f:
+    with open(karaoke_config_file, 'r', encoding='utf8') as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         
     chunk_size = config['audio']['chunk_size']
@@ -110,12 +110,12 @@ def load_roformer(config_path, ckpt):
     
     return model, chunk_size, instruments, sample_rate
 
-def load_kareoke_roformer():
-    global kareoke_roformer_model, kareoke_roformer_chunk_size, kareoke_roformer_instruments, kareoke_roformer_sample_rate
-    if kareoke_roformer_model is None:
-        kareoke_roformer_model, kareoke_roformer_chunk_size, kareoke_roformer_instruments, kareoke_roformer_sample_rate = load_roformer(kareoke_config_file, kareoke_model_ckpt)
+def load_karaoke_roformer():
+    global karaoke_roformer_model, karaoke_roformer_chunk_size, karaoke_roformer_instruments, karaoke_roformer_sample_rate
+    if karaoke_roformer_model is None:
+        karaoke_roformer_model, karaoke_roformer_chunk_size, karaoke_roformer_instruments, karaoke_roformer_sample_rate = load_roformer(karaoke_config_file, karaoke_model_ckpt)
         
-    return kareoke_roformer_model, kareoke_roformer_chunk_size, kareoke_roformer_instruments, kareoke_roformer_sample_rate, kareoke_roformer_overlap
+    return karaoke_roformer_model, karaoke_roformer_chunk_size, karaoke_roformer_instruments, karaoke_roformer_sample_rate, karaoke_roformer_overlap
     
 def load_vocals_roformer():
     global vocals_roformer_model, vocals_roformer_chunk_size, vocals_roformer_instruments, vocals_roformer_sample_rate
@@ -283,9 +283,9 @@ def instrumental(audioinput, output_inst, output_vocals=None, output_inst_with_b
         if progress_cb:
             progress_cb(progress * VOCALS_PROGRESS)
     
-    def kareoke_progress(progress):
+    def karaoke_progress(progress):
         if progress_cb:
-            progress_cb(VOCALS_PROGRESS + (progress * KAREOKE_PROGRESS))
+            progress_cb(VOCALS_PROGRESS + (progress * KARAOKE_PROGRESS))
     
     if not output_inst_with_backup or (output_vocals is not None and output_vocals_with_backup):
         print('doing vocal separation')
@@ -299,15 +299,15 @@ def instrumental(audioinput, output_inst, output_vocals=None, output_inst_with_b
         inst_without_backing, vocals_with_backing, d_samplerate = None, None, None
         
     if output_inst_with_backup or (output_vocals is not None and not output_vocals_with_backup):
-        print('doing kareoke separation')
-        inst_with_backing, vocals_without_backing, r_samplerate = roformer_demix(audioinput, load_func=load_kareoke_roformer, progress_cb=kareoke_progress)
+        print('doing karaoke separation')
+        inst_with_backing, vocals_without_backing, r_samplerate = roformer_demix(audioinput, load_func=load_karaoke_roformer, progress_cb=karaoke_progress)
     else:
         # not needed
-        print('skipping kareoke separation')
+        print('skipping karaoke separation')
         inst_with_backing, vocals_without_backing, r_samplerate = None, None, None
     
     if progress_cb:
-        progress_cb(VOCALS_PROGRESS + KAREOKE_PROGRESS)
+        progress_cb(VOCALS_PROGRESS + KARAOKE_PROGRESS)
         
     if d_samplerate is not None and r_samplerate is not None and d_samplerate != r_samplerate:
         # match sample rates
@@ -342,7 +342,7 @@ def instrumental(audioinput, output_inst, output_vocals=None, output_inst_with_b
     return silence_marks
 
 def main(argv):
-    #prepare_vocals_ckpt(roformer_model_dir / 'orig_mel_band_roformer_vocals_becruily.ckpt', kareoke_model_ckpt, vocals_model_ckpt)
+    #prepare_vocals_ckpt(roformer_model_dir / 'orig_mel_band_roformer_vocals_becruily.ckpt', karaoke_model_ckpt, vocals_model_ckpt)
     def prog(progress):
         print(f'progress: {progress}')
         
