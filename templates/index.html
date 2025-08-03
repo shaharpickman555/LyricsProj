@@ -44,30 +44,35 @@
   </style>
 </head>
 <body>
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    <div class="container mt-3">
-      {% for category, message in messages %}
-        <div class="alert alert-{{ category }}" role="alert">{{ message }}</div>
-      {% endfor %}
-    </div>
-  {% endif %}
-{% endwith %}
-<div class="container">
-  <h1 id="pageTitle" class="text-center" style="margin:13px; line-height:1.1; font-size:52px;"></h1>
-  <div class="d-flex justify-content-start align-items-center mb-3" style="gap:0.25rem;">
-    <label for="nicknameInput" class="fw-bold mb-0">Name:</label>
-    <input type="text" id="nicknameInput" class="form-control" style="max-width:100px;font-size:0.8rem;padding:0.2rem;" placeholder="Name">
-    <button type="button" id="saveNameBtn" class="btn btn-sm btn-primary" style="font-size:0.7rem;padding:0.2rem 0.5rem;">Save</button>
-  </div>
-  <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}" method="POST" enctype="multipart/form-data" class="p-3 bg-white rounded shadow" style="position: relative;">
-    <input type="hidden" name="uploader" id="uploaderField" value="">
-    <div class="loading-overlay" id="loadingOverlay">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading…</span>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="container mt-3">
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}" role="alert">{{ message }}</div>
+        {% endfor %}
       </div>
-    </div>
-    <div class="mb-3">
+    {% endif %}
+  {% endwith %}
+
+  <div class="container">
+  <h1 id="pageTitle" class="text-center" style="margin:13px; line-height:1.1; font-size:52px;"></h1>
+      <div class="d-flex justify-content-start align-items-center mb-3" style="gap:0.25rem;">
+        <label for="nicknameInput" class="fw-bold mb-0">Name:</label>
+        <input type="text" id="nicknameInput" class="form-control"
+               style="max-width:100px;font-size:0.8rem;padding:0.2rem;" placeholder="Name">
+        <button id="saveNameBtn" class="btn btn-sm btn-primary"
+                style="font-size:0.7rem;padding:0.2rem 0.5rem;">Save</button>
+      </div>
+    <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}"
+          method="POST" enctype="multipart/form-data"
+          class="p-3 bg-white rounded shadow" style="position: relative;">
+      <input type="hidden" name="uploader" id="uploaderField" value="">
+      <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+      </div>
+      <div class="mb-3">
       <label class="form-check-label me-3">
         <input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube
       </label>
@@ -184,6 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper);
   const searchWrapper = document.getElementById("ytSearchWrapper");
   const searchTooltip = bootstrap.Tooltip.getOrCreateInstance(searchWrapper);
+
   document.querySelectorAll('#addSongForm label[data-bs-toggle="tooltip"]').forEach(el => {
     bootstrap.Tooltip.getOrCreateInstance(el);
   });
@@ -223,6 +229,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
     function updateSearchBtnState() {
+    // if we’re not on YouTube mode, always disable
     if (!sourceYoutube.checked) {
       ytSearchBtn.disabled = true;
       searchTooltip.disable();
@@ -230,21 +237,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const v = ytInput.value.trim();
     if (v === "") {
+      // empty → “Write keywords to search”
       ytSearchBtn.disabled = true;
       searchWrapper.setAttribute("data-bs-original-title", "Write keywords to search");
       searchTooltip.enable();
     }
     else if (/^https?:\/\//.test(v)) {
+      // looks like a URL → “Searching is for YouTube keywords, not URLs”
       ytSearchBtn.disabled = true;
       searchWrapper.setAttribute("data-bs-original-title", "Searching is for YouTube keywords, not URLs");
       searchTooltip.enable();
     }
     else {
+      // anything else is OK
       ytSearchBtn.disabled = false;
       searchTooltip.disable();
     }
   }
-
 
   function onSourceOrInputChange() {
     updateAddBtnState();
@@ -352,7 +361,8 @@ document.addEventListener("DOMContentLoaded", () => {
           <h6 class="card-title">${item.title}</h6>
           <p class="card-text text-truncate">${item.uploader}</p>
           <p class="card-text">${formatDuration(item.duration)} • ${formatViews(item.views)}</p>
-        </div></div>`;
+            </div>
+          </div>`;
       const c = col.querySelector(".youtube-result-card");
       c.addEventListener("click", () => {
         document.querySelectorAll(".youtube-result-card.selected").forEach(x => x.classList.remove("selected"));
@@ -511,12 +521,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const b = ["Llama","Badger","Koala","Tiger","Panda","Unicorn","Dolphin","Moose","Chicken"];
     return a[Math.floor(Math.random()*a.length)] + b[Math.floor(Math.random()*b.length)] + Math.floor(Math.random()*100);
   }
-  function updatePageTitle(name){
+  function updatePageTitle(name) {
     pageTitle.innerHTML = `Karaoke Playlist<br><span style="font-size:32px;">Room: ${roomId}</span>`;
   }
-  function getStatusIcon(s){
-    return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s;
-  }
+    function getStatusIcon(s){
+      return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s;
+    }
+
 });
 </script>
 </body>

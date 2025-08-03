@@ -27,17 +27,19 @@
     .youtube-result-card.card { transition: transform 0.2s; }
     .youtube-result-card.selected { border: 2px solid #28a745; }
     .loading-overlay {
-      position: absolute; inset: 0; background: rgba(255,255,255,0.8);
-      z-index: 2000; display: none; align-items: center; justify-content: center;
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.8);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
     }
-    .song-thumbnail { max-width: 100%; height: auto; display: block; margin-bottom: 1rem; }
-    #player-container { position: relative; background: #fff; border: 1px solid #000; max-width: 800px; margin: 2rem auto; padding: 0; }
-    #videoPlayer { width: 100%; height: 100%; object-fit: contain; background: #000; }
-    .vjs-bar {
-      position: absolute; left: 0; right: 0; bottom: 0; z-index: 40;
-      height: 44px; display: flex; align-items: center; gap: .8rem;
-      background: rgba(0,0,0, .78); color: #fff; padding: 0 .8rem; font-size: 18px;
-      user-select: none; transition: opacity .25s;
+    .song-thumbnail {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin-bottom: 1rem;
     }
     .vjs-bar.hideFS { opacity: 0; pointer-events: none; }
     .vjs-btn { cursor: pointer; color: inherit; }
@@ -80,8 +82,8 @@
         <button id="saveNameBtn" class="btn btn-sm btn-primary"
                 style="font-size:0.7rem;padding:0.2rem 0.5rem;">Save</button>
       </div>
-    </div>
-    <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}?mode=singlemode"
+      </div>
+    <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}"
           method="POST" enctype="multipart/form-data"
           class="p-3 bg-white rounded shadow" style="position: relative;">
       <input type="hidden" name="uploader" id="uploaderField" value="">
@@ -91,59 +93,63 @@
         </div>
       </div>
       <div class="mb-3">
-        <label class="form-check-label me-3"><input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube</label>
-        <label class="form-check-label"><input type="radio" name="source" value="local" id="sourceLocal"> Local File</label>
+      <label class="form-check-label me-3">
+        <input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube
+      </label>
+      <label class="form-check-label">
+        <input type="radio" name="source" value="local" id="sourceLocal"> Local File
+      </label>
+    </div>
+    <div id="youtubeInputGroup" class="input-group mb-3 w-100">
+      <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg" placeholder="Search YouTube or paste URL...">
+          <span id="ytSearchWrapper" style="display: inline-flex;" data-bs-toggle="tooltip" title="Searching is for YouTube keywords, not URLs">
+      <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button></span>
+    </div>
+    <div id="localFileGroup" class="mb-3 d-none">
+      <input type="file" name="local_file" id="local_file" accept="video/*,audio/*" class="form-control">
+    </div>
+    <div class="mt-3">
+      <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Create lyrics + Remove vocals"><input type="radio" name="keep" value="nothing" checked> Full Karaoke</label>
+      <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Remove vocals only, without lyrics"><input type="radio" name="keep" value="video"> Remove Vocals</label>
+      <label class="form-check-label" data-bs-toggle="tooltip" title="Add the video to the playlist as is"><input type="radio" name="keep" value="all"> Keep Video</label>
+    </div>
+    <button type="button" id="toggleAdvancedBtn" class="btn btn-outline-secondary mt-3">Advanced ▼</button>
+    <div id="advancedSection">
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="no_cache" name="no_cache" value="1">
+        <label class="form-check-label" for="no_cache">Don't cache</label>
       </div>
-      <div id="youtubeInputGroup" class="input-group mb-3 w-100">
-        <input type="text" name="youtube_url" id="youtube_url" class="form-control form-control-lg" placeholder="Search YouTube or paste URL...">
-        <span id="ytSearchWrapper" style="display: inline-flex;" data-bs-toggle="tooltip" title="Searching is for YouTube keywords, not URLs">
-        <button class="btn btn-outline-secondary" type="button" id="youtubeSearchBtn">Search</button></span>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="dont_overlay_video" name="dont_overlay_video" value="1">
+        <label class="form-check-label" for="dont_overlay_video">Blank Video</label>
       </div>
-      <div id="localFileGroup" class="mb-3 d-none">
-        <input type="file" name="local_file" id="local_file" accept="video/*,audio/*" class="form-control">
-      </div>
-      <div class="mt-3">
-        <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Create lyrics + Remove vocals"><input type="radio" name="keep" value="nothing" checked> Full Karaoke</label>
-        <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Remove vocals only, without lyrics"><input type="radio" name="keep" value="video"> Remove Vocals</label>
-        <label class="form-check-label" data-bs-toggle="tooltip" title="Add the video to the playlist as is"><input type="radio" name="keep" value="all"> Keep Video</label>
-      </div>
-      <button type="button" id="toggleAdvancedBtn" class="btn btn-outline-secondary mt-3">Advanced ▼</button>
-      <div id="advancedSection">
-        <div class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" id="no_cache" name="no_cache" value="1">
-          <label class="form-check-label" for="no_cache">Don't cache</label>
-        </div>
-        <div class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" id="dont_overlay_video" name="dont_overlay_video" value="1">
-          <label class="form-check-label" for="dont_overlay_video">Blank Video</label>
-        </div>
-        <div class="mb-3">
-          <label for="lang_hint" class="form-label">Language Hint</label>
-          <select class="form-select" id="lang_hint" name="lang_hint">
-            <option value="" selected>None</option>
-            {% for k,v in languages.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}
-          </select>
-        </div>
-      </div>
-      <span id="addSongWrapper" class="d-block" data-bs-toggle="tooltip" title="A valid YouTube URL is needed">
-        <button id="addSongBtn" type="submit" class="btn btn-primary w-100 mt-3" disabled>Add Song</button>
-      </span>
-    </form>
-    <hr>
-    <div class="playlist-container">
-
-      <div id="playlistSection" style="display:none;">
-        <h2 class="text-center">Playlist</h2>
-        <ul id="playlist" class="list-group"></ul>
-        <div class="d-flex justify-content-center mt-3">
-          <button id="nextSongBtn" class="btn btn-danger w-25 me-3">Next ⏭️</button>
-        </div>
-        <hr class="mt-5">
-        <h3 class="text-center text-secondary">Previous Songs</h3>
-        <ul id="previousPlaylist" class="list-group"></ul>
+      <div class="mb-3">
+        <label for="lang_hint" class="form-label">Language Hint</label>
+        <select class="form-select" id="lang_hint" name="lang_hint">
+          <option value="" selected>None</option>
+          {% for k,v in languages.items() %}<option value="{{k}}">{{v}}</option>{% endfor %}
+        </select>
       </div>
     </div>
+    <span id="addSongWrapper" class="d-block" data-bs-toggle="tooltip" title="A valid YouTube URL is needed to add a song">
+      <button id="addSongBtn" type="submit" class="btn btn-primary w-100 mt-3" disabled>Add Song</button>
+    </span>
+  </form>
+  <hr>
+  <div class="playlist-container">
+
+    <div id="playlistSection" style="display:none;">
+      <h2 class="text-center">Playlist</h2>
+      <ul id="playlist" class="list-group"></ul>
+      <div class="d-flex justify-content-center mt-3">
+        <button id="nextSongBtn" class="btn btn-danger w-25 me-3">Next ⏭️</button>
+      </div>
+      <hr class="mt-5">
+      <h3 class="text-center text-secondary">Previous Songs</h3>
+      <ul id="previousPlaylist" class="list-group"></ul>
+    </div>
   </div>
+</div>
 
   <div class="container text-center">
     <div id="player-container"></div>
@@ -166,102 +172,103 @@
     </div>
   </template>
 
-  <div class="modal fade" id="songInfoModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Song Info</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <h6 id="songTitleHeading" class="mb-3"></h6>
-        <img id="songThumbnail" class="song-thumbnail d-none" src="" alt="Thumbnail">
-        <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
-        <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
-      </div>
-      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
-    </div></div>
-  </div>
+<div class="modal fade" id="songInfoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Song Info</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <h6 id="songTitleHeading" class="mb-3"></h6>
+      <img id="songThumbnail" class="song-thumbnail d-none" src="" alt="Thumbnail">
+      <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
+      <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
+  </div></div>
+</div>
 
-  <div class="modal fade" id="ytSearchModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Select YouTube Video</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="ytResultsContainer" class="row gy-3"></div>
-        <div id="ytMoreContainer" class="text-center mt-3"></div>
-      </div>
-      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
-    </div></div>
-  </div>
+<div class="modal fade" id="ytSearchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Select YouTube Video</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div id="ytResultsContainer" class="row gy-3"></div>
+      <div id="ytMoreContainer" class="text-center mt-3"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button></div>
+  </div></div>
+</div>
 
-  <script>
-    const socket = io(), roomId = "{{ room_id }}";
-    socket.on('connect', () => socket.emit("join_room", { room_id: roomId }));
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const socket = io(), roomId = "{{ room_id }}";
+  const pageTitle = document.getElementById("pageTitle");
+  const nicknameInput = document.getElementById("nicknameInput");
+  const saveNameBtn = document.getElementById("saveNameBtn");
+  const uploaderField = document.getElementById("uploaderField");
+  const addSongForm = document.getElementById("addSongForm");
+  const addSongBtn = document.getElementById("addSongBtn");
+  const addSongWrapper = document.getElementById("addSongWrapper");
+  const loadingOverlay = document.getElementById("loadingOverlay");
+  const sourceYoutube = document.getElementById("sourceYoutube");
+  const sourceLocal   = document.getElementById("sourceLocal");
+  const ytInput       = document.getElementById("youtube_url");
+  const ytSearchBtn   = document.getElementById("youtubeSearchBtn");
+  const ytModal       = new bootstrap.Modal(document.getElementById("ytSearchModal"));
+  const ytResultsContainer = document.getElementById("ytResultsContainer");
+  const ytMoreContainer    = document.getElementById("ytMoreContainer");
+  const songThumbnail      = document.getElementById("songThumbnail");
+  const localFileInput = document.getElementById("local_file");
+  let allResults = [];
 
-    const pageTitle = document.getElementById("pageTitle"),
-          nicknameInput = document.getElementById("nicknameInput"),
-          saveNameBtn = document.getElementById("saveNameBtn"),
-          uploaderField = document.getElementById("uploaderField"),
-          addSongForm = document.getElementById("addSongForm"),
-          addSongBtn = document.getElementById("addSongBtn"),
-          addSongWrapper = document.getElementById("addSongWrapper"),
-          loadingOverlay = document.getElementById("loadingOverlay"),
-          sourceYoutube = document.getElementById("sourceYoutube"),
-          sourceLocal   = document.getElementById("sourceLocal"),
-          ytInput       = document.getElementById("youtube_url"),
-          ytSearchBtn   = document.getElementById("youtubeSearchBtn"),
-          ytModal       = new bootstrap.Modal(document.getElementById("ytSearchModal")),
-          ytResultsContainer = document.getElementById("ytResultsContainer"),
-          localFileInput = document.getElementById("local_file"),
-          ytMoreContainer    = document.getElementById("ytMoreContainer"),
-          songThumbnail      = document.getElementById("songThumbnail"),
-          tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper),
-          searchWrapper = document.getElementById("ytSearchWrapper"),
-          searchTooltip = bootstrap.Tooltip.getOrCreateInstance(searchWrapper),
-          cont               = document.getElementById("player-container");
-    let allResults = [], currentSrc = "";
+  const tooltip = bootstrap.Tooltip.getOrCreateInstance(addSongWrapper);
+  const searchWrapper = document.getElementById("ytSearchWrapper");
+  const searchTooltip = bootstrap.Tooltip.getOrCreateInstance(searchWrapper);
+  const cont               = document.getElementById("player-container");
+  let currentSrc = "";
 
-    document.querySelectorAll('#addSongForm label[data-bs-toggle="tooltip"]').forEach(el => {
-      bootstrap.Tooltip.getOrCreateInstance(el);
-    });
-    let storedName = localStorage.getItem("karaokeNickname");
-    if (!storedName || !storedName.trim()) storedName = generateCoolNickname();
-    nicknameInput.value = storedName;
-    updatePageTitle(storedName);
+  document.querySelectorAll('#addSongForm label[data-bs-toggle="tooltip"]').forEach(el => {
+    bootstrap.Tooltip.getOrCreateInstance(el);
+  });
+  let storedName = localStorage.getItem("karaokeNickname");
+  if (!storedName || !storedName.trim()) storedName = generateCoolNickname();
+  nicknameInput.value = storedName;
+  updatePageTitle(storedName);
 
-    saveNameBtn.addEventListener("click", () => {
-      let newName = nicknameInput.value.trim();
-      if (!newName) newName = generateCoolNickname();
-      localStorage.setItem("karaokeNickname", newName);
-      nicknameInput.value = newName;
-      updatePageTitle(newName);
-    });
+  saveNameBtn.addEventListener("click", () => {
+    let newName = nicknameInput.value.trim();
+    if (!newName) newName = generateCoolNickname();
+    localStorage.setItem("karaokeNickname", newName);
+    nicknameInput.value = newName;
+    updatePageTitle(newName);
+  });
 
-    function updateAddBtnState() {
-      if (sourceLocal.checked) {
-        if (localFileInput.files.length > 0) {
-          addSongBtn.disabled = false;
-          tooltip.disable();
+  function updateAddBtnState() {
+        if (sourceLocal.checked) {
+          if (localFileInput.files.length > 0) {
+            addSongBtn.disabled = false;
+            tooltip.disable();
+          } else {
+            addSongBtn.disabled = true;
+            addSongWrapper.setAttribute("data-bs-original-title","You need to choose a local audio file first");
+            tooltip.enable();
+          }
         } else {
-          addSongBtn.disabled = true;
-          addSongWrapper.setAttribute("data-bs-original-title", "You need to choose a local audio file first");
-          tooltip.enable();
-        }
-      } else {
-        const v = ytInput.value.trim();
-        if (/^https?:\/\//.test(v)) {
-          addSongBtn.disabled = false;
-          tooltip.disable();
-        } else {
-          addSongBtn.disabled = true;
-          addSongWrapper.setAttribute("data-bs-original-title", "A valid YouTube URL is needed");
-          tooltip.enable();
+          const v = ytInput.value.trim();
+          if (/^https?:\/\//.test(v)) {
+            addSongBtn.disabled = false;
+            tooltip.disable();
+          } else {
+            addSongBtn.disabled = true;
+            addSongWrapper.setAttribute("data-bs-original-title","A valid YouTube URL is needed");
+            tooltip.enable();
+          }
         }
       }
-    }
-  function updateSearchBtnState() {
+    function updateSearchBtnState() {
     // if we’re not on YouTube mode, always disable
     if (!sourceYoutube.checked) {
       ytSearchBtn.disabled = true;
@@ -304,226 +311,261 @@
 
 
   function toggleSource() {
-      if (sourceYoutube.checked) {
-        document.getElementById("youtubeInputGroup").classList.remove("d-none");
-        document.getElementById("localFileGroup").classList.add("d-none");
-      } else {
-        document.getElementById("youtubeInputGroup").classList.add("d-none");
-        document.getElementById("localFileGroup").classList.remove("d-none");
-      }
+    if (sourceYoutube.checked) {
+      document.getElementById("youtubeInputGroup").classList.remove("d-none");
+      document.getElementById("localFileGroup").classList.add("d-none");
+    } else {
+      document.getElementById("youtubeInputGroup").classList.add("d-none");
+      document.getElementById("localFileGroup").classList.remove("d-none");
+    }
   }
+  sourceYoutube.addEventListener("change", toggleSource);
+  sourceLocal.addEventListener("change", toggleSource);
+  toggleSource();
+
+  const adv = document.getElementById("advancedSection");
+  const advBtn = document.getElementById("toggleAdvancedBtn");
+  adv.style.display = "none";
+  advBtn.addEventListener("click", () => {
+    if (adv.style.display === "none") {
+      adv.style.display = "block";
+      advBtn.textContent = "Advanced ▲";
+    } else {
+      adv.style.display = "none";
+      advBtn.textContent = "Advanced ▼";
+    }
+  });
   
-    sourceYoutube.addEventListener("change", toggleSource);
-    sourceLocal.addEventListener("change", toggleSource);
-    toggleSource();
-
-    const adv = document.getElementById("advancedSection"), advBtn = document.getElementById("toggleAdvancedBtn");
-    adv.style.display = "none";
-    advBtn.addEventListener("click", () => {
-      if (adv.style.display==="none") { adv.style.display="block"; advBtn.textContent="Advanced ▲"; }
-      else { adv.style.display="none"; advBtn.textContent="Advanced ▼"; }
-    });
+  async function submit(form) {
+    const data = new FormData(form);
     
-    async function submit(form) {
-        const data = new FormData(form);
+    try {
+        response = await fetch(form.action, {
+            body: data,
+            method: form.method,
+        });
         
-        try {
-            response = await fetch(form.action, {
-                body: data,
-                method: form.method,
-            });
-            
-            if (!response.ok) {
-                alert("Error adding song");
-                console.log("Error adding song", response.status, await response.text());
-            }
-        } catch (e) {
+        if (!response.ok) {
             alert("Error adding song");
-            console.log("Error adding song", error.message);
-        } finally {   
-            ytInput.value = "";
-            localFileInput.value = "";
-            loadingOverlay.style.display = "none";
+            console.log("Error adding song", response.status, await response.text());
         }
+    } catch (e) {
+        alert("Error adding song");
+        console.log("Error adding song", error.message);
+    } finally {   
+        ytInput.value = "";
+        localFileInput.value = "";
+        loadingOverlay.style.display = "none";
     }
+  }
 
-    addSongForm.addEventListener("submit", e => {
+  addSongForm.addEventListener("submit", e => {
+    e.preventDefault();
+    loadingOverlay.style.display = "flex";
+    //addSongForm.submit();
+    
+    submit(addSongForm);
+  });
+
+  ytSearchBtn.addEventListener("click", performYtSearch);
+  ytInput.addEventListener("keypress", e => {
+    if (e.key === "Enter") {
       e.preventDefault();
-      loadingOverlay.style.display = "flex";
-      //addSongForm.submit();
-      
-      submit(addSongForm);
-    });
-
-    ytSearchBtn.addEventListener("click", performYtSearch);
-    ytInput.addEventListener("keypress", e => { if (e.key==="Enter") { e.preventDefault(); if (!ytSearchBtn.disabled) performYtSearch(); } });
-
-    function performYtSearch() {
-      const q = ytInput.value.trim();
-      const urlPat = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/|youtube\.com\/shorts\/).+/;
-      if (urlPat.test(q)) { alert("This is a valid YouTube URL. Click 'Add Song'."); return; }
-      if (!q) { alert("Enter search term or URL."); return; }
-      fetch(`/search/yt/6?q=${encodeURIComponent(q)}`)
-        .then(r=>{ if(!r.ok) throw ""; return r.json(); })
-        .then(res=>{ allResults=res; displayYtResults(3); })
-        .catch(()=>alert("Error fetching YouTube results."));
+      if (!ytSearchBtn.disabled) performYtSearch();
     }
+  });
 
-    function displayYtResults(count) {
-      ytResultsContainer.innerHTML=""; ytMoreContainer.innerHTML="";
-      allResults.slice(0,count).forEach(item=>{
-        const col=document.createElement("div");
-        col.className="col-md-6 col-lg-4";
-        col.innerHTML=`
-          <div class="card h-100 youtube-result-card" style="cursor:pointer;">
-            <img src="${item.thumbnail}" class="card-img-top">
-            <div class="card-body">
-              <h6 class="card-title">${item.title}</h6>
-              <p class="card-text text-truncate">${item.uploader}</p>
-              <p class="card-text">${formatDuration(item.duration)} • ${formatViews(item.views)}</p>
+  function performYtSearch() {
+    const q = ytInput.value.trim();
+    const urlPat = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/|youtube\.com\/shorts\/).+/;
+    if (urlPat.test(q)) {
+      alert("This is a valid YouTube URL. Click 'Add Song'.");
+      return;
+    }
+    if (!q) { alert("Enter search term or URL."); return; }
+    fetch(`/search/yt/6?q=${encodeURIComponent(q)}`)
+      .then(r => { if (!r.ok) throw ""; return r.json(); })
+      .then(res => { allResults = res; displayYtResults(3); })
+      .catch(() => alert("Error fetching YouTube results."));
+  }
+
+  function displayYtResults(count) {
+    ytResultsContainer.innerHTML = "";
+    ytMoreContainer.innerHTML = "";
+    allResults.slice(0, count).forEach(item => {
+      const col = document.createElement("div");
+      col.className = "col-md-6 col-lg-4";
+      col.innerHTML = `<div class="card h-100 youtube-result-card" style="cursor:pointer;">
+        <img src="${item.thumbnail}" class="card-img-top">
+        <div class="card-body">
+          <h6 class="card-title">${item.title}</h6>
+          <p class="card-text text-truncate">${item.uploader}</p>
+          <p class="card-text">${formatDuration(item.duration)} • ${formatViews(item.views)}</p>
             </div>
           </div>`;
-        const c=col.querySelector(".youtube-result-card");
-        c.addEventListener("click",()=>{
-          document.querySelectorAll(".youtube-result-card.selected").forEach(x=>x.classList.remove("selected"));
-          c.classList.add("selected");
-          ytInput.value=/^https?:\/\//.test(item.url)?item.url:`https://www.youtube.com/watch?v=${item.url}`;
-          updateAddBtnState();
-          updateSearchBtnState();
-          setTimeout(()=>ytModal.hide(),200);
-        });
-        c.addEventListener("mouseover",()=>c.style.transform="scale(1.02)");
-        c.addEventListener("mouseout",()=>c.style.transform="scale(1)");
-        ytResultsContainer.appendChild(col);
+      const c = col.querySelector(".youtube-result-card");
+      c.addEventListener("click", () => {
+        document.querySelectorAll(".youtube-result-card.selected").forEach(x => x.classList.remove("selected"));
+        c.classList.add("selected");
+        ytInput.value = /^https?:\/\//.test(item.url) ? item.url : `https://www.youtube.com/watch?v=${item.url}`;
+        updateAddBtnState();
+        updateSearchBtnState();
+        setTimeout(() => ytModal.hide(), 200);
       });
-      if(count<allResults.length){
-        const btn=document.createElement("button");
-        btn.className="btn btn-link"; btn.textContent="Show more results";
-        btn.addEventListener("click",()=>displayYtResults(allResults.length));
-        ytMoreContainer.appendChild(btn);
-      }
-      ytModal.show();
-    }
-
-    socket.on("playlist_updated", data=>{
-      renderPlaylist(data.playlist);
-      renderPrevious(data.previous_songs);
-      document.getElementById("playlistSection").style.display =
-        (data.playlist.length>0||data.previous_songs.length>0)?"block":"none";
+      c.addEventListener("mouseover", () => c.style.transform = "scale(1.02)");
+      c.addEventListener("mouseout", () => c.style.transform = "scale(1)");
+      ytResultsContainer.appendChild(col);
     });
-    document.getElementById("playlistSection").style.display="none";
+    if (count < allResults.length) {
+      const btn = document.createElement("button");
+      btn.className = "btn btn-link";
+      btn.textContent = "Show more results";
+      btn.addEventListener("click", () => displayYtResults(allResults.length));
+      ytMoreContainer.appendChild(btn);
+    }
+    ytModal.show();
+  }
 
-    function renderPlaylist(pl) {
-      const el=document.getElementById("playlist"); el.innerHTML="";
-      pl.forEach((job,i)=>{
-        const li=document.createElement("li");
-        li.dataset.index=i;
-        li.className="list-group-item d-flex justify-content-between align-items-center";
-        if(job.is_playing) li.classList.add("playing-song");
-        let html=`
-          <span class="drag-handle">☰</span>
-          <div class="flex-grow-1 text-start">
-            <span class="title">${job.is_playing?"🎵 ":""}${job.title}</span>
-            <span class="status">${getStatusIcon(job.status)}</span>`;
-        if(job.status==="processing"){
-          const pct=Math.round((job.progress||0)*100);
-          html+=`<div class="progress mt-2"><div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">${pct}%</div></div>`;
-        }
-        html+=`</div>`;
+  socket.on("connect", () => socket.emit("join_room", { room_id: roomId }));
+  socket.on("playlist_updated", data => {
+    renderPlaylist(data.playlist);
+    renderPrevious(data.previous_songs);
+    document.getElementById("playlistSection").style.display =
+            (data.playlist.length > 0 || data.previous_songs.length > 0) ? "block" : "none";
+  });
+  document.getElementById("playlistSection").style.display = "none";
+
+  function renderPlaylist(pl) {
+    const el = document.getElementById("playlist");
+    el.innerHTML = "";
+    pl.forEach((job, i) => {
+      
+      const li = document.createElement("li");
+      li.dataset.index = i;
+      li.className = "list-group-item d-flex justify-content-between align-items-center";
+      if (job.is_playing) {
+        li.classList.add("playing-song");
+      }
+      let html = `<span class="drag-handle">☰</span><div class="flex-grow-1 text-start">
+        <span class="title">${job.is_playing?"🎵 ":""}${job.title}</span>
+        <span class="status">${getStatusIcon(job.status)}</span>`;
+      if (thumbnail.length > 0) {
+        html += `<div class="mt-2"><img class="song-thumbnail" src="${thumbnail}" /></div>`
+      }
+      if (job.status==="processing") {
+        const pct = Math.round((job.progress||0)*100);
+        html += `<div class="progress mt-2"><div class="progress-bar progress-bar-striped progress-bar-animated bg-info text-dark" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">${pct}%</div></div>`;
+      }
+      html += `</div>`;
         const safe=job.title.replace(/"/g,"&quot;");
         const uploader=localStorage.getItem("karaokeNickname")||"";
         const thumbnail=job.info?.thumbnail||"";
-        html+=`
-          <button type="button" class="btn btn-sm btn-info me-2 info-btn"
-                  data-title="${safe}"
-                  data-url="${job.url||""}"
-                  data-duration="${job.info?.duration||"N/A"}"
-                  data-uploader="${uploader}"
-                  data-thumbnail="${thumbnail}">?</button>`;
-        if(!job.is_playing) html+=`<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
-        li.innerHTML=html;
-        el.appendChild(li);
+
+      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
+                data-title="${safe}"
+                data-url="${job.url||""}"
+                data-duration="${job.info?.duration||"N/A"}"
+                data-uploader="${uploader}"
+                data-thumbnail="${thumbnail}">?</button>`;
+      if (!job.is_playing) html += `<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
+      li.innerHTML = html;
+      el.appendChild(li);
+    });
+  }
+
+  function renderPrevious(prev) {
+    const el = document.getElementById("previousPlaylist");
+    el.innerHTML = "";
+    prev.forEach((job, i) => {
+      const li = document.createElement("li");
+      li.dataset.index = i;
+      li.className = "list-group-item d-flex justify-content-between align-items-center";
+      let html = `<div class="flex-grow-1 text-start">${job.title}</div>`;
+      const safe      = job.title.replace(/"/g,"&quot;");
+      const uploader  = localStorage.getItem("karaokeNickname") || "Unknown";
+      const thumbnail = job.info?.thumbnail || "";
+      html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
+                data-title="${safe}"
+                data-url="${job.url||""}"
+                data-duration="${job.info?.duration||"N/A"}"
+                data-uploader="${uploader}"
+                data-thumbnail="${thumbnail}">?</button>`;
+      html += `<button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;
+      li.innerHTML = html;
+      el.appendChild(li);
+    });
+  }
+
+  const songInfoModal = new bootstrap.Modal(document.getElementById("songInfoModal"));
+  document.addEventListener("click", e => {
+    if (e.target.classList.contains("info-btn")) {
+      const t = e.target.dataset;
+      document.getElementById("songTitleHeading").textContent = t.title;
+      if (t.thumbnail) {
+        songThumbnail.src = t.thumbnail;
+        songThumbnail.classList.remove("d-none");
+      } else {
+        songThumbnail.classList.add("d-none");
+      }
+      const link = document.getElementById("songUrlLink");
+      if (t.url) { link.textContent = t.url; link.href = t.url; }
+      else { link.textContent = "None"; link.removeAttribute("href"); }
+      let dur = "N/A";
+      if (t.duration !== "N/A") {
+        const secs = Math.floor(parseFloat(t.duration)||0), m = Math.floor(secs/60), s = secs%60;
+        dur = `${m}:${s.toString().padStart(2,"0")}`;
+      }
+      document.getElementById("songDurationText").textContent = dur;
+      songInfoModal.show();
+    }
+  });
+
+  $(document).on("click", ".remove-btn", function(){
+    socket.emit("remove_song", { room_id: roomId, index: $(this).data("index") });
+  });
+  document.getElementById("nextSongBtn").addEventListener("click", () => {
+    fetch(`/next_song/${roomId}`, { method:"POST" });
+  });
+  $(document).on("click", ".restore-btn", function(){
+    const idx = $(this).data("index");
+    fetch(`/restore_song/${roomId}`, {
+      method:"POST",
+      headers: {"Content-Type":"application/x-www-form-urlencoded"},
+      body: "index=" + encodeURIComponent(idx)
+    }).then(r=>r.json()).then(j=>j.error&&alert(j.error));
+  });
+  new Sortable(document.getElementById("playlist"), {
+    handle:".drag-handle", animation:150,
+    onStart: evt => { if(evt.item.classList.contains("playing-song")) evt.preventDefault(); },
+    onEnd: evt => {
+      socket.emit("reorder_playlist", {
+        room_id: roomId,
+        oldIndex: evt.oldIndex,
+        newIndex: evt.newIndex
       });
     }
+  });
 
-    function renderPrevious(prev) {
-      const el=document.getElementById("previousPlaylist"); el.innerHTML="";
-      prev.forEach((job,i)=>{
-        const li=document.createElement("li");
-        li.dataset.index=i;
-        li.className="list-group-item d-flex justify-content-between align-items-center";
-        let html=`<div class="flex-grow-1 text-start">${job.title}</div>`;
-        const safe=job.title.replace(/"/g,"&quot;");
-        const uploader=localStorage.getItem("karaokeNickname")||"Unknown";
-        const thumbnail=job.info?.thumbnail||"";
-        html+=`
-          <button type="button" class="btn btn-sm btn-info me-2 info-btn"
-                  data-title="${safe}"
-                  data-url="${job.url||""}"
-                  data-duration="${job.info?.duration||"N/A"}"
-                  data-uploader="${uploader}"
-                  data-thumbnail="${thumbnail}">?</button>
-          <button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;
-        li.innerHTML=html;
-        el.appendChild(li);
-      });
+  function formatDuration(sec) {
+    const t = parseInt(sec,10), m = Math.floor(t/60), s = t%60;
+    return `${m}:${s.toString().padStart(2,"0")}`;
+  }
+  function formatViews(n){
+    if(n>=1e6) return (n/1e6).toFixed(1).replace(/\.0$/,"")+"M views";
+    if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,"")+"K views";
+    return n+" views";
+  }
+  function generateCoolNickname(){
+    const a = ["Funky","Silly","Lucky","Fierce","Chill","Magic","Cool","Shiny","Cosmic","Happy"];
+    const b = ["Llama","Badger","Koala","Tiger","Panda","Unicorn","Dolphin","Moose","Chicken"];
+    return a[Math.floor(Math.random()*a.length)] + b[Math.floor(Math.random()*b.length)] + Math.floor(Math.random()*100);
+  }
+  function updatePageTitle(name) {
+    pageTitle.innerHTML=`Single Room Karaoke<br>`;
+  }
+    function getStatusIcon(s){
+      return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s;
     }
-
-    const songInfoModal=new bootstrap.Modal(document.getElementById("songInfoModal"));
-    document.addEventListener("click",e=>{
-      if(e.target.classList.contains("info-btn")){
-        const t=e.target.dataset;
-        document.getElementById("songTitleHeading").textContent=t.title;
-        if(t.thumbnail){ songThumbnail.src=t.thumbnail; songThumbnail.classList.remove("d-none"); }
-        else songThumbnail.classList.add("d-none");
-        const link=document.getElementById("songUrlLink");
-        if(t.url){ link.textContent=t.url; link.href=t.url; }
-        else{ link.textContent="None"; link.removeAttribute("href"); }
-        let dur="N/A";
-        if(t.duration!=="N/A"){
-          const secs=Math.floor(parseFloat(t.duration)||0), m=Math.floor(secs/60), s=secs%60;
-          dur=`${m}:${s.toString().padStart(2,"0")}`;
-        }
-        document.getElementById("songDurationText").textContent=dur;
-        songInfoModal.show();
-      }
-    });
-
-    $(document).on("click",".remove-btn",function(){
-      socket.emit("remove_song",{room_id:roomId,index:$(this).data("index")});
-    });
-    document.getElementById("nextSongBtn").addEventListener("click",()=>{
-      fetch(`/next_song/${roomId}`,{method:"POST"});
-    });
-    $(document).on("click",".restore-btn",function(){
-      const idx=$(this).data("index");
-      fetch(`/restore_song/${roomId}`,{
-        method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},
-        body:"index="+encodeURIComponent(idx)
-      }).then(r=>r.json()).then(j=>j.error&&alert(j.error));
-    });
-
-    new Sortable(document.getElementById("playlist"),{
-      handle:".drag-handle",animation:150,
-      onStart:evt=>{ if(evt.item.classList.contains("playing-song")) evt.preventDefault(); },
-      onEnd:evt=>{
-        socket.emit("reorder_playlist",{room_id:roomId,oldIndex:evt.oldIndex,newIndex:evt.newIndex});
-      }
-    });
-
-    function formatDuration(sec){ const t=parseInt(sec,10), m=Math.floor(t/60), s=t%60; return `${m}:${s.toString().padStart(2,"0")}`; }
-    function formatViews(n){
-      if(n>=1e6) return (n/1e6).toFixed(1).replace(/\.0$/,"")+"M views";
-      if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,"")+"K views";
-      return n+" views";
-    }
-    function generateCoolNickname(){
-      const a=["Funky","Silly","Lucky","Fierce","Chill","Magic","Cool","Shiny","Cosmic","Happy"];
-      const b=["Llama","Badger","Koala","Tiger","Panda","Unicorn","Dolphin","Moose","Chicken"];
-      return a[Math.floor(Math.random()*a.length)]+b[Math.floor(Math.random()*b.length)]+Math.floor(Math.random()*100);
-    }
-    function updatePageTitle(name){ pageTitle.innerHTML=`Single Room Karaoke<br>`; }
-    function getStatusIcon(s){ return {"idle":"⌛","processing":"🔄","done":"✅","error":"💀"}[s]||s; }
 
     function injectPlayer(src){
       currentSrc=src; cont.style.background="#000";
@@ -583,6 +625,8 @@
     {% else %}
       cont.innerHTML='<p class="empty-msg">No songs available to play.</p>';
     {% endif %}
+	
+	});
   </script>
 </body>
 </html>
