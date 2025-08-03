@@ -131,7 +131,7 @@ def add_song(room_id):
         redirect_string = "singlemode_room"
     else:
         redirect_string = "index"
-    youtube_url = request.form.get("youtube_url", "").strip()
+    youtube_url = request.form.get("youtube_url", "").strip().split('&')[0]
     local_file = request.files.get("local_file")
     keep_val = request.form.get("keep", "nothing")
     job_params = dict(keep=keep_val)
