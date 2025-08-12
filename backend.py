@@ -515,7 +515,7 @@ def extract_audio(input, output_audio):
 def audio_with_blank(audiopath, outputpath, subtitles_path=None):
     run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
 
-video_codec_options = ['-vcodec', 'h264_nvenc']
+video_codec_options = ['-vcodec', 'h264_nvenc','-movflags', '+faststart','-tune', 'fastdecode']
 #video_codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
     
 def video_with_audio(videopath, audiopath, outputpath, max_width=1080):
