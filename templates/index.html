@@ -127,7 +127,7 @@
         <button id="nextSongBtn" class="btn btn-danger w-25 me-3">Next ⏭️</button>
       </div>
       <hr class="mt-5">
-      <h3 class="text-center text-secondary">Previous Songs</h3>
+      <h3 id="previousHeader" class="text-center text-secondary">Previous Songs</h3>
       <ul id="previousPlaylist" class="list-group"></ul>
     </div>
   </div>
@@ -434,6 +434,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderPrevious(prev) {
+    const header = document.getElementById("previousHeader");
+    header.style.display = (prev && prev.length > 0) ? "" : "none";
     const el = document.getElementById("previousPlaylist");
     el.innerHTML = "";
     prev.forEach((job, i) => {
