@@ -515,7 +515,7 @@ def extract_audio(input, output_audio):
 def audio_with_blank(audiopath, outputpath, subtitles_path=None):
     run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
 
-video_codec_options = ['-vcodec', 'h264_nvenc','-movflags', '+faststart','-tune', 'fastdecode']
+video_codec_options = ['-vcodec', 'h264_nvenc','-tune', 'fastdecode']
 #video_codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
     
 def video_with_audio(videopath, audiopath, outputpath, max_width=1080):
@@ -549,7 +549,7 @@ def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_p
     run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
                 '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex',
                 f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]',
-                '-map', '[v]:v', '-map', '1:a', *video_codec_options, outputpath)
+                '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart',*video_codec_options, outputpath)
 
 def reencode_video(videopath, outputpath):
     run_process(ffmpeg_path, '-y', '-i', videopath, '-c:v', 'copy', *video_codec_options, outputpath)
