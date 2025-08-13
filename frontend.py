@@ -247,7 +247,10 @@ def get_current_song(room_id):
     if not data:
         return None
     playlist = data["playlist"]
-    for job in playlist:
+    # choose the first complete job that is not canceled or error
+    jobs = [job for job in playlist if job.status not in ("canceled", "error")]
+    if jobs:
+        job = jobs[0]
         if job.status == "done":
             if data["current_song"] != job:
                 data["current_song"] = job

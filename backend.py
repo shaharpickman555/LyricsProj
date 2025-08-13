@@ -245,7 +245,7 @@ def replace_ext(path, ext):
         return f'{path}{ext}'
     return f'{path[:path.rfind(".")]}{ext}'
     
-def youtube_info(url):
+def youtube_info(url, audio_only=True):
     yt_opts = {
         'skip_download': True,
         'force_noplaylist': True,
@@ -263,7 +263,7 @@ def youtube_info(url):
     except ValueError:
         thumbnail = info['thumbnails'][0]['url']
 
-    return info['id'], info['title'], dict(duration=info['duration'],thumbnail=thumbnail)
+    return info['id'], info['title'], dict(duration=info['duration'], thumbnail=thumbnail), f'{info["id"]}.{"mp3" if audio_only else "mp4"}'
 
 def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress_cb=None):
     if progress_cb:
@@ -687,31 +687,23 @@ def digest(path=None, content=None):
 
 def selectors_join(selectors):
     return '_'.join(f'{str(k)}={str(v)}' for k,v in selectors.items())
+
+def cache_path(local_path, selectors):
+    name = replace_ext(os.path.basename(local_path), '')
+    return os.path.join(local_cache_dir, f'{selectors_join(selectors)}_{name}.mp4')
     
 def generate_with_cache(f, local_path, selectors, dont_cache=False, **kwargs):
-    name = replace_ext(os.path.basename(local_path), '')
-    out_path = os.path.join(local_cache_dir, f'{selectors_join(selectors)}_{name}.mp4')
+    out_path = cache_path(local_path, selectors)
     
     if dont_cache or not os.path.exists(out_path):
         f(local_path, out_path, **kwargs)
         
     return out_path
     
-def has_cache(local_path, selectors):
-    name = replace_ext(os.path.basename(local_path), '')
-    out_path = os.path.join(local_cache_dir, f'{selectors_join(selectors)}_{name}.mp4')
-    
-    return os.path.exists(out_path)
-    
-def canonify_input_file(path=None, content=None):
-    h = digest(path=path) if path else digest(content=content)
+def canonify_input_file(content):
+    h = digest(content=content)
 
     canon = os.path.join(local_cache_dir, f'{h}.input')
-    if path is None:
-        with open(canon, 'wb') as fh:
-            fh.write(content)
-    elif path != canon:
-        shutil.move(path, canon)
     return canon
 
 def dir_size_num_oldest(path):
@@ -744,12 +736,15 @@ def clean_cache():
     
 #########################threading#####################
 
+actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
+
 class StopException(Exception):
     pass
     
 class CancelJob(Exception):
     pass
     
+statuses = ['idle', 'processing', 'canceled', 'done', 'error']
 @dataclass(frozen=True, eq=False)
 class Job:
     tid : int = None
@@ -785,30 +780,57 @@ class Job:
             
         if self.title is None:
             if self.url:
-                id, title, info = youtube_info(self.url)
+                id, title, info, download_path = youtube_info(self.url, audio_only=(self.keep == 'nothing' and self.blank_video))
+                canon_path = canonify_input_file(download_path.encode('latin-1')) #don't delete youtube video file afterwards, but also just use path for hashing
             elif self.path:
                 title = os.path.splitext(os.path.basename(self.path))[0]
                 info = dict(size=os.path.getsize(self.path))
+                canon_path = canonify_input_file(open(self.path, 'rb').read())
             elif self.data:
                 title = digest(content=self.data)
                 info = dict(size=len(self.data))
+                canon_path = canonify_input_file(job.data)
                 
             if getattr(info, 'duration', 0) > max_job_duration or getattr(info, 'size', 0) > max_job_filesize:
                 raise ValueError('Job too big')
             
             object.__setattr__(self, 'title', title)
             object.__setattr__(self, 'info', info)
+            object.__setattr__(self, 'canon_path', canon_path)
             
     def __eq__(self, other):
         return self.tid == getattr(other, 'tid', None)
         
     def update_status_locked(self, status, out_path=None):
+        if status not in statuses:
+            raise ValueError(f'status change to {status} is not allowed')
         object.__setattr__(self, 'status', status)
         if out_path:
             object.__setattr__(self, 'out_path', out_path)
             
     def update_progress_locked(self, progress):
         object.__setattr__(self, 'progress', progress)
+        
+    def action(self):
+        if self.url:
+            # we don't have a file to process
+            is_video, is_audio = not (self.keep == 'nothing' and self.blank_video), True
+        else:
+            is_video, is_audio = is_video_audio(self.canon_path)
+            if not is_video and not is_audio:
+                raise ValueError('Input is not a video or an audio file')
+            
+        #override if only audio
+        blank_video = self.blank_video if is_video else True
+        
+        func, available_selectors = actions[self.keep]
+        selectors = {k:v for k,v in dict(keep=self.keep, lang_hint=self.lang_hint, blank_video=blank_video).items() if k in available_selectors}
+        
+        return func, selectors, blank_video
+        
+    def cached_path(self):
+        _, selectors, _ = self.action()
+        return cache_path(self.canon_path, selectors)
 
 
 def raise_exception_in_thread(thread, e):
@@ -892,40 +914,26 @@ def work_loop():
                 
             try:
                 current_job = job
-                
                 job_status_cb(job, None)
                 
                 output = None
-                
-                #work
-                
                 if job.url is not None:
                     download_path, title = youtube_download(job.url, local_upload_dir, audio_only=(job.keep == 'nothing' and job.blank_video), dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
-                    path = canonify_input_file(content=open(download_path, 'rb').read()) #don't delete youtube video file
+                    shutil.copy(download_path, job.canon_path)
                 elif job.path is not None:
-                    path = canonify_input_file(path=job.path)
+                    if job.path != job.canon_path:
+                        shutil.move(job.path, job.canon_path)
                 else:
-                    path = canonify_input_file(content=job.data)
-                    
-                is_video, is_audio = is_video_audio(path)
-                if not is_video and not is_audio:
-                    raise ValueError('Input is not a video or an audio file')
-                    
-                #override if only audio
-                blank_video = job.blank_video if is_video else True
+                    with open(job.canon_path, 'wb') as fh:
+                        fh.write(job.data)
                 
                 set_model_framework(job.model_type or default_model_type)
-                
-                actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
-                func, available_selectors = actions[job.keep]
-                selectors = {k:v for k,v in dict(keep=job.keep, lang_hint=job.lang_hint, blank_video=blank_video).items() if k in available_selectors}
-                
-                output = generate_with_cache(func, path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, progress_cb=process_cb)
+                func, selectors, blank_video = job.action()
+                output = generate_with_cache(func, job.canon_path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, progress_cb=process_cb)
                 
                 #TODO remove canon input file?
                 
                 current_job = None
-                
                 with lock:
                     job.update_status_locked('done', output)
                     
@@ -985,8 +993,18 @@ def generate_tid():
 def set_queue(jobs : list[Job]):
     global lock, event, job_queue
     
+    jobs = tuple(j for j in jobs)
+    
+    #finish cached immediately
+    for j in jobs:
+        outpath = j.cached_path()
+        if not j.no_cache and os.path.exists(outpath):
+            with lock:
+                j.update_status_locked('done', outpath)
+            job_status_cb(j, None)
+    
     with lock:
-        job_queue = tuple(j for j in jobs)
+        job_queue = jobs
         event.set()
         
 def cancel_job(job):
@@ -1104,7 +1122,12 @@ def main(argv):
     if not os.path.isfile(input):  # YT Link
         input, title = youtube_download(input, local_upload_dir, audio_only=(keep == 'nothing' and args.blank_video), dont_cache=args.dont_use_cache, progress_cb=youtube_progress_cb)
     
-    canon_input = canonify_input_file(content=open(input, 'rb').read()) #dont move input file
+    inputdata = open(input, 'rb').read()
+    canon_input = canonify_input_file(inputdata)
+    
+    if input != canon_input:
+        with open(canon_input, 'wb') as fh:
+            fh.write(inputdata)
     
     is_video, is_audio = is_video_audio(canon_input)
     if not is_video and not is_audio:
