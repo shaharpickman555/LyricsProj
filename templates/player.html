@@ -11,25 +11,88 @@
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 
   <style>
-    body{margin:0;font-family:sans-serif;background:#fff;color:#000}
-    .container{padding:1rem}
-
-    #player-container {
-      position: relative;
-      background: #fff;
-      border: 1px solid #000;
-      max-width: 800px;
-      margin: 2rem auto;
-      padding: 0;
+    /* ---- Light theme tokens (match landing) ---- */
+    :root{
+      --bg: #f9fafb;
+      --fg: #212529;
+      --muted: #6c757d;
+      --card: #ffffff;
+      --border: #e6e9ee;
+      --shadow: 0 6px 24px rgba(17, 24, 39, 0.08);
+      --shadow-hover: 0 10px 28px rgba(17, 24, 39, 0.12);
+      --accent: #ff6b35; /* warm orange like landing */
+      --accent-hover: #e05b2e;
+      --accent-contrast: #ffffff;
+      --ring: rgba(255,107,53,.25);
     }
-    #videoPlayer {
+
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .container { padding: 2rem 1rem 3rem; max-width: 1000px; }
+
+    /* ---- Header ---- */
+    #pageTitle {
+      margin: 12px 0 8px;
+      line-height: 1.15;
+      font-size: clamp(36px, 5vw, 52px);
+      font-weight: 800;
+      letter-spacing: .2px;
+    }
+    #pageTitle span {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      margin-top: .35rem;
+      padding: .2rem .6rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      color: var(--muted);
+      box-shadow: var(--shadow);
+      font-size: 28px !important;
+    }
+
+    /* ---- Player card ---- */
+    #player-container{
+      position: relative;
+      background: #000; /* becomes visible once a video is injected; stays white if empty */
+      border: 1px solid var(--border);
+      border-radius: 1.25rem;
+      max-width: 960px;
+      margin: 1.5rem auto 0;
+      padding: 0;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transition: box-shadow .15s ease, transform .15s ease;
+      min-height: 280px;
+      background-color: var(--card);
+    }
+    #player-container:hover{
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-1px);
+    }
+    /* Empty-state text inside player */
+    #player-container .empty-msg{
+      padding: 2rem;
+      color: var(--muted);
+    }
+
+    /* Video element */
+    #videoPlayer{
       width: 100%;
       height: 100%;
       object-fit: contain;
       background: #000;
     }
 
-    /* -------- fullscreen ------- */
+    /* ---- Fullscreen behavior ---- */
     #player-container:fullscreen,
     #player-container:-webkit-full-screen,
     #player-container:-moz-full-screen,
@@ -43,79 +106,121 @@
       width:100%!important;height:100%!important;object-fit:contain
     }
 
-
-
-    /* -------- toolbar ---------- */
+    /* ---- Custom toolbar (floats over video) ---- */
     .vjs-bar{
       position:absolute;
-	  left:0;
-	  right:0;
-	  bottom:0;
-	  z-index:40;
-      height:44px;
-	  display:flex;
-	  align-items:center;
-	  gap:.8rem;
-      background:rgba(0,0,0,.78);
-	  color:#fff;
-	  padding:0 .8rem;
+      left:0; right:0; bottom:0;
+      z-index:40;
+      height:52px;
+      display:flex; align-items:center; gap:.9rem;
+      background: linear-gradient(to top, rgba(0,0,0,.78), rgba(0,0,0,.55));
+      color:#fff;
+      padding:0 1rem;
       font-size:18px;
-	  user-select:none;
+      user-select:none;
       transition:opacity .25s;
     }
     .vjs-bar.hideFS{opacity:0;pointer-events:none}
     .vjs-btn{cursor:pointer;text-decoration:none;color:inherit}
-    .vjs-btn:hover{color:#0d6efd}
-    
-    #vProgress { flex: 1; height: 4px; appearance: none; background: #555; border-radius: 2px; }
-    #vProgress::-webkit-slider-thumb {
-      appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #0d6efd;
-    }
-    .right-group{display:flex;gap:0.9rem;margin-left:auto}
+    .vjs-btn:hover{color: var(--accent)}
 
-    /* -------- empty text ------- */
-    #player-container .empty-msg{padding:1rem;color:#666}
-	/* -------- QR watermark ----- */
-    #qrMark {
-      position: absolute; top: 1.5%; left: 1.5%;
-      width: 10%; max-width: 200px; aspect-ratio: 1/1; z-index: 30; display: none;
+    /* Progress bar styled for light theme accent */
+    #vProgress{
+      flex:1; height: 6px; appearance:none; background: rgba(255,255,255,.25);
+      border-radius: 999px; outline: none; cursor: pointer;
     }
-	
-    #qrMark img { width: 100%; height: 100%; display: block; }
+    #vProgress::-webkit-slider-thumb{
+      appearance:none; width: 14px; height: 14px; border-radius:50%;
+      background: var(--accent); box-shadow: 0 0 0 6px var(--ring);
+      border: none; transition: transform .12s ease;
+    }
+    #vProgress::-webkit-slider-thumb:active{ transform: scale(1.08); }
+    #timeLabel{ width:125px; text-align:right; font-variant-numeric: tabular-nums; opacity: .95; }
+
+    .right-group{display:flex;gap:1rem;margin-left:auto}
+
+    /* ---- QR watermark over video ---- */
+    #qrMark{
+      position:absolute; top: 1.25%; left: 1.25%;
+      width: 11%; max-width: 180px; aspect-ratio:1/1; z-index:30; display:none;
+      border-radius: .5rem; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.25);
+    }
+    #qrMark img{ width:100%; height:100%; display:block; }
+
+    /* ---- Controls under player ---- */
+    .actions{
+      display:flex; justify-content:center; gap:1rem; margin-top:1.25rem;
+    }
+    .btn-accent{
+      background: var(--accent); color: var(--accent-contrast);
+      border: 1px solid transparent; font-weight:700;
+      border-radius: .9rem; padding:.8rem 1.1rem;
+      box-shadow: var(--shadow);
+    }
+    .btn-accent:hover{ background: var(--accent-hover); color:#fff; }
+
+    .btn-outline-dark.btn-xl{
+      border-radius: .9rem; padding:.8rem 1.1rem; font-weight:700;
+    }
+
+    /* ---- QR block ---- */
+    .qr-card{
+      max-width: 520px;
+      margin: 1.25rem auto 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      box-shadow: var(--shadow);
+      padding: 1.25rem;
+    }
+    .qr-card h2{
+      font-size:1.05rem; margin:0 0 .35rem; color: var(--muted); font-weight:700;
+      letter-spacing: .2px; text-transform: uppercase;
+    }
+    .qr-img{
+      width: 200px; height: 200px; border-radius: .5rem; border: 1px solid var(--border);
+      background:#fff; padding:.35rem; box-shadow: var(--shadow);
+    }
   </style>
 </head>
 <body>
   <div class="container text-center">
-    <h1 class="mb-2">Now&nbsp;Playing<br>
-      <span style="font-size:32px">Room: {{ room_id }}</span></h1>
+    <h1 id="pageTitle" class="text-center">
+      Now Playing<br>
+      <span>Room: {{ room_id }}</span>
+    </h1>
 
+    <!-- Player card (JS injects video + toolbar here) -->
     <div id="player-container"></div>
 
-    <div class="mt-4">
-      <a href="/{{ room_id }}" target="_blank" class="btn btn-dark">Open Playlist</a>
+    <!-- Actions -->
+    <div class="actions">
+      <a href="/{{ room_id }}" target="_blank" class="btn btn-outline-dark btn-xl">Open Playlist</a>
     </div>
 
-    <div class="mt-3">
-      <p>Scan to open this room's Playlist:</p>
-      <img src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}"
+    <!-- QR Share -->
+    <div class="qr-card">
+      <h2>Share This Room</h2>
+      <p class="text-muted mb-3">Scan to open this room’s playlist on your phone.</p>
+      <img class="qr-img"
+           src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}"
            width="200" height="200" alt="QR code">
     </div>
   </div>
 
-  <!-- reusable widget markup -->
+  <!-- reusable widget markup (unchanged IDs for JS) -->
   <template id="playerTemplate">
     <video id="videoPlayer" autoplay muted playsinline></video>
 
     <div id="qrMark">
-      <img src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}"
-           alt="QR code">
+      <img src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}" alt="QR code">
     </div>
 
     <div class="vjs-bar">
       <span id="btnPlay"  class="vjs-btn" title="Play / Pause">⏸</span>
 
       <input id="vProgress" type="range" min="0" value="0" step="0.1">
-      <span id="timeLabel" style="width:115px;text-align:right">0:00&nbsp;/&nbsp;0:00</span>
+      <span id="timeLabel">0:00&nbsp;/&nbsp;0:00</span>
 
       <div class="right-group">
         <span id="btnVol"  class="vjs-btn" title="Volume">🔊</span>
@@ -131,185 +236,174 @@
 document.addEventListener("DOMContentLoaded", () => {
   const socket = io(), roomId = "{{ room_id }}";
 
-    const cont = document.getElementById("player-container");
-    let currentSrc = "";
+  const cont = document.getElementById("player-container");
+  let currentSrc = "";
 
   // --- FS scroll restore helpers ---
   let fsAnchor = null;     // invisible anchor before the player
   let savedScrollY = null; // fallback absolute scroll
-
   function ensureFsAnchor() {
     if (!fsAnchor || !fsAnchor.isConnected) {
       fsAnchor = document.createElement("span");
       fsAnchor.setAttribute("aria-hidden", "true");
       fsAnchor.style.cssText = "position:relative;display:block;width:0;height:0;pointer-events:none;";
-      // insert right before the player container
       cont.parentNode.insertBefore(fsAnchor, cont);
     }
   }
-	
-    /* ---------- helpers ------------------------------------ */
-const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
 
-    /**  Injects the custom player markup & behaviour  */
-    function injectPlayer(src){
-      currentSrc = src;
-      cont.style.background="#000";
-      cont.innerHTML = document.getElementById("playerTemplate").innerHTML;
+  /* ---------- helpers ------------------------------------ */
+  const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
 
-      const vid    = cont.querySelector("#videoPlayer");
-      const playBt = cont.querySelector("#btnPlay");
-      const nextBt = cont.querySelector("#btnNext");
-      const fsBt   = cont.querySelector("#btnFS");
-      const qrBt   = cont.querySelector("#btnQR");
-      const qrBox  = cont.querySelector("#qrMark");
-      const prog   = cont.querySelector("#vProgress");
-      const label  = cont.querySelector("#timeLabel");
-      const volBt  = cont.querySelector("#btnVol");
-      const dlBt   = cont.querySelector("#btnDL");
-      const bar    = cont.querySelector(".vjs-bar");
+  /**  Injects the custom player markup & behaviour  */
+  function injectPlayer(src){
+    currentSrc = src;
+    cont.style.background="#000";
+    cont.innerHTML = document.getElementById("playerTemplate").innerHTML;
 
-      /* -------- video src --------------- */
-      vid.src = "/"+src;
-      dlBt.href = "/"+src;
-      dlBt.download = src.split('/').pop();
+    const vid    = cont.querySelector("#videoPlayer");
+    const playBt = cont.querySelector("#btnPlay");
+    const nextBt = cont.querySelector("#btnNext");
+    const fsBt   = cont.querySelector("#btnFS");
+    const qrBt   = cont.querySelector("#btnQR");
+    const qrBox  = cont.querySelector("#qrMark");
+    const prog   = cont.querySelector("#vProgress");
+    const label  = cont.querySelector("#timeLabel");
+    const volBt  = cont.querySelector("#btnVol");
+    const dlBt   = cont.querySelector("#btnDL");
+    const bar    = cont.querySelector(".vjs-bar");
 
-      /* -------- timeline  --------------- */
-      vid.addEventListener("loadedmetadata",()=>{
-        prog.max = vid.duration;
-        label.textContent = `0:00 / ${toHMS(vid.duration)}`;
-      });
-      vid.addEventListener("timeupdate",()=>{
-        prog.value = vid.currentTime;
-        label.textContent =
-          `${toHMS(vid.currentTime)} / ${toHMS(vid.duration)}`;
-      });
-      prog.oninput = e => vid.currentTime = +e.target.value;
+    /* -------- video src --------------- */
+    vid.src = "/"+src;
+    dlBt.href = "/"+src;
+    dlBt.download = src.split('/').pop();
 
-      /* -------- play / pause ------------ */
-      const togglePlay=()=>vid.paused?vid.play():vid.pause();
-      playBt.onclick = togglePlay;
-      vid.onclick    = togglePlay;
-      vid.onplay  = ()=> playBt.textContent="⏸";
-      vid.onpause = ()=> playBt.textContent="▶";
-
-      /* -------- volume (simple cycle) --- */
-      const levels=[1,0.4,0.2,0];
-	  const icons=["🔊","🔉","🔈","🔇"];
-	  let vi=0;
-      applyVol();
-      volBt.onclick=()=>{vi=(vi+1)%levels.length;applyVol();};
-      function applyVol(){ vid.volume=levels[vi]; vid.muted=vid.volume===0; volBt.textContent=icons[vi]; }
-
-      /* -------- fullscreen control ------ */
-      const reqFull = el => (el.requestFullscreen||el.webkitRequestFullscreen||
-                             el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
-      const exitFull= () => (document.exitFullscreen||document.webkitExitFullscreen||
-                             document.mozCancelFullScreen||document.msExitFullscreen).call(document);
-      // When entering FS, remember where we are; restoring happens on FS change.
-      const toggleFull = el => {
-        const inFS = document.fullscreenElement || document.webkitFullscreenElement ||
-                     document.mozFullScreenElement || document.msFullscreenElement;
-        if (!inFS) {
-          ensureFsAnchor();
-          savedScrollY = window.scrollY;
-          reqFull(el);
-        } else {
-          exitFull();
-        }
-      };
-
-      fsBt.onclick   = ()=> toggleFull(cont);
-      vid.ondblclick = ()=> toggleFull(cont);
-
-      /* -------- QR visibility ----------- */
-      let qrVisible=false;
-	  updateQR();
-      qrBt.onclick = ()=>{qrVisible=!qrVisible;updateQR();};
-      function updateQR(){qrBox.style.display=qrVisible?"block":"none";qrBt.textContent=qrVisible?"Hide QR":"Show QR";}
-
-      /* -------- toolbar auto‑hide ------- */
-      let hideTimer=null;
-      function isFS(){
-        return (document.fullscreenElement||document.webkitFullscreenElement||
-                document.mozFullScreenElement||document.msFullscreenElement) === cont;
-      }
-      function showBar(){
-        bar.classList.remove("hideFS");
-        if(isFS()){resetHide();}
-      }
-      function hideBar(){ bar.classList.add("hideFS"); }
-      function resetHide(){
-        clearTimeout(hideTimer);
-        hideTimer=setTimeout(()=>{ if(isFS()) hideBar(); },3000);
-      }
-      // User activity listeners
-      document.addEventListener("mousemove",showBar);
-      document.addEventListener("keydown",showBar);
-
-      // FS state changes
-      function handleFSChange(){
-        const inFS = isFS();
-        qrVisible = inFS; updateQR();
-        bar.classList.remove("hideFS");
-        clearTimeout(hideTimer);
-        if (inFS) {
-          resetHide();
-        } else {
-          // We just EXITED fullscreen → restore scroll position near the player
-          requestAnimationFrame(() => {
-            if (fsAnchor) {
-              fsAnchor.scrollIntoView({ block: "start", inline: "nearest" });
-              // If you have a fixed header, nudge up a bit (e.g., 60px):
-              // window.scrollBy(0, -60);
-            } else if (savedScrollY != null) {
-              window.scrollTo({ top: savedScrollY, behavior: "auto" });
-            }
-            savedScrollY = null;
-          });
-        }
-      }
-
-      document.addEventListener("fullscreenchange",handleFSChange);
-      document.addEventListener("webkitfullscreenchange", handleFSChange);
-      document.addEventListener("mozfullscreenchange", handleFSChange);
-      document.addEventListener("MSFullscreenChange", handleFSChange);
-
-      /* ---- Next song ---------- */
-      nextBt.onclick = triggerNext;
-      vid.onended    = triggerNext;
-      function triggerNext(){ doNextSong(); }
-    }
-
-    /* ---------- server push ------------------------------- */
-	socket.on("connect", () => socket.emit("join_room", { room_id: roomId }));
-    socket.on("player_updated", data=>{
-      if(data.current_song){
-        if(data.current_song !== currentSrc) injectPlayer(data.current_song);
-      }else{
-        currentSrc="";
-        cont.style.background="#fff";
-        cont.innerHTML =
-          `<p class="empty-msg text-muted">${
-            data.in_process ?
-              "No songs are done yet; waiting on processing." :
-              "No songs available to play."
-          }</p>`;
-      }
+    /* -------- timeline  --------------- */
+    vid.addEventListener("loadedmetadata",()=>{
+      prog.max = vid.duration;
+      label.textContent = `0:00 / ${toHMS(vid.duration)}`;
     });
+    vid.addEventListener("timeupdate",()=>{
+      prog.value = vid.currentTime;
+      label.textContent = `${toHMS(vid.currentTime)} / ${toHMS(vid.duration)}`;
+    });
+    prog.oninput = e => vid.currentTime = +e.target.value;
 
-    /* ---------- initial render ---------------------------- */
-    {% if current_song %}
-      injectPlayer("{{ current_song.out_path }}");
-    {% else %}
-      cont.innerHTML='<p class="empty-msg text-muted">No songs available to play.</p>';
-    {% endif %}
+    /* -------- play / pause ------------ */
+    const togglePlay=()=>vid.paused?vid.play():vid.pause();
+    playBt.onclick = togglePlay;
+    vid.onclick    = togglePlay;
+    vid.onplay  = ()=> playBt.textContent="⏸";
+    vid.onpause = ()=> playBt.textContent="▶";
 
-    /* ---------- helper ------------------------------------ */
-    function doNextSong(){
-      fetch(`/next_song/${roomId}`,{method:"POST"})
-        .catch(err=>console.error("next_song error",err));
+    /* -------- volume (simple cycle) --- */
+    const levels=[1,0.4,0.2,0];
+    const icons=["🔊","🔉","🔈","🔇"];
+    let vi=0;
+    applyVol();
+    volBt.onclick=()=>{vi=(vi+1)%levels.length;applyVol();};
+    function applyVol(){ vid.volume=levels[vi]; vid.muted=vid.volume===0; volBt.textContent=icons[vi]; }
+
+    /* -------- fullscreen control ------ */
+    const reqFull = el => (el.requestFullscreen||el.webkitRequestFullscreen||
+                           el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
+    const exitFull= () => (document.exitFullscreen||document.webkitExitFullscreen||
+                           document.mozCancelFullScreen||document.msExitFullscreen).call(document);
+    const toggleFull = el => {
+      const inFS = document.fullscreenElement || document.webkitFullscreenElement ||
+                   document.mozFullScreenElement || document.msFullscreenElement;
+      if (!inFS) {
+        ensureFsAnchor();
+        savedScrollY = window.scrollY;
+        reqFull(el);
+      } else {
+        exitFull();
+      }
+    };
+    fsBt.onclick   = ()=> toggleFull(cont);
+    vid.ondblclick = ()=> toggleFull(cont);
+
+    /* -------- QR visibility ----------- */
+    let qrVisible=false;
+    updateQR();
+    qrBt.onclick = ()=>{qrVisible=!qrVisible;updateQR();};
+    function updateQR(){qrBox.style.display=qrVisible?"block":"none";qrBt.textContent=qrVisible?"Hide QR":"Show QR";}
+
+    /* -------- toolbar auto-hide ------- */
+    let hideTimer=null;
+    function isFS(){
+      return (document.fullscreenElement||document.webkitFullscreenElement||
+              document.mozFullScreenElement||document.msFullscreenElement) === cont;
     }
+    function showBar(){
+      bar.classList.remove("hideFS");
+      if(isFS()){resetHide();}
+    }
+    function hideBar(){ bar.classList.add("hideFS"); }
+    function resetHide(){
+      clearTimeout(hideTimer);
+      hideTimer=setTimeout(()=>{ if(isFS()) hideBar(); },3000);
+    }
+    document.addEventListener("mousemove",showBar);
+    document.addEventListener("keydown",showBar);
+
+    function handleFSChange(){
+      const inFS = isFS();
+      qrVisible = inFS; updateQR();
+      bar.classList.remove("hideFS");
+      clearTimeout(hideTimer);
+      if (inFS) {
+        resetHide();
+      } else {
+        requestAnimationFrame(() => {
+          if (fsAnchor) {
+            fsAnchor.scrollIntoView({ block: "start", inline: "nearest" });
+          } else if (savedScrollY != null) {
+            window.scrollTo({ top: savedScrollY, behavior: "auto" });
+          }
+          savedScrollY = null;
+        });
+      }
+    }
+    document.addEventListener("fullscreenchange",handleFSChange);
+    document.addEventListener("webkitfullscreenchange", handleFSChange);
+    document.addEventListener("mozfullscreenchange", handleFSChange);
+    document.addEventListener("MSFullscreenChange", handleFSChange);
+
+    /* ---- Next song ---------- */
+    nextBt.onclick = triggerNext;
+    vid.onended    = triggerNext;
+    function triggerNext(){ doNextSong(); }
+  }
+
+  /* ---------- server push ------------------------------- */
+  socket.on("connect", () => socket.emit("join_room", { room_id: roomId }));
+  socket.on("player_updated", data=>{
+    if(data.current_song){
+      if(data.current_song !== currentSrc) injectPlayer(data.current_song);
+    }else{
+      currentSrc="";
+      cont.style.background="#fff";
+      cont.innerHTML =
+        `<p class="empty-msg text-muted">${
+          data.in_process ?
+            "No songs are done yet; waiting on processing." :
+            "No songs available to play."
+        }</p>`;
+    }
+  });
+
+  /* ---------- initial render ---------------------------- */
+  {% if current_song %}
+    injectPlayer("{{ current_song.out_path }}");
+  {% else %}
+    cont.innerHTML='<p class="empty-msg text-muted">No songs available to play.</p>';
+  {% endif %}
+
+  /* ---------- helper ------------------------------------ */
+  function doNextSong(){
+    fetch(`/next_song/${roomId}`,{method:"POST"})
+      .catch(err=>console.error("next_song error",err));
+  }
 });
   </script>
 </body>
