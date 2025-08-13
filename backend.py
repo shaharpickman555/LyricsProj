@@ -764,6 +764,7 @@ class Job:
     progress : float = 0.0
     status : str = 'idle'
     out_path : str = None
+    error : BaseException = None
     
     def __post_init__(self):
         if self.keep not in ('nothing', 'video', 'all'):
@@ -807,6 +808,9 @@ class Job:
         object.__setattr__(self, 'status', status)
         if out_path:
             object.__setattr__(self, 'out_path', out_path)
+            
+    def update_error_locked(self, e):
+        object.__setattr__(self, 'error', e)
             
     def update_progress_locked(self, progress):
         object.__setattr__(self, 'progress', progress)
@@ -882,7 +886,7 @@ def work_loop():
     def progress_cb(progress):
         with lock:
             job.update_progress_locked(progress)
-        job_status_cb(job, None)
+        job_status_cb(job)
     
     def youtube_progress_cb(progress):
         progress_cb(progress * YOUTUBE_DOWNLOAD_PROGRESS)
@@ -914,7 +918,7 @@ def work_loop():
                 
             try:
                 current_job = job
-                job_status_cb(job, None)
+                job_status_cb(job)
                 
                 output = None
                 if job.url is not None:
@@ -937,15 +941,16 @@ def work_loop():
                 with lock:
                     job.update_status_locked('done', output)
                     
-                job_status_cb(job, None)
+                job_status_cb(job)
             except Exception as e:
                 if isinstance(e, (StopException, KeyboardInterrupt)):
                     raise
                     
                 with lock:
                     job.update_status_locked('canceled' if isinstance(e, CancelJob) else 'error')
+                    job.update_error_locked(e)
 
-                job_status_cb(job, e)
+                job_status_cb(job)
             finally:
                 current_job = None
     except StopException:
@@ -1001,7 +1006,7 @@ def set_queue(jobs : list[Job]):
         if not j.no_cache and os.path.exists(outpath):
             with lock:
                 j.update_status_locked('done', outpath)
-            job_status_cb(j, None)
+            job_status_cb(j)
     
     with lock:
         job_queue = jobs
@@ -1013,9 +1018,9 @@ def cancel_job(job):
             raise_exception_in_thread(worker_thread, CancelJob)
 
 def thread_test():
-    def cb(job, error):
-        if error:
-            logger.info(f'{job.tid} error: {traceback.format_exc(error)}')
+    def cb(job):
+        if job.status == 'error':
+            logger.info(f'{job.tid} error: {job.error}')
         elif job.status == 'processing':
             logger.info(f'progress: {100*job.progress:.2f}%')
         elif job.status == 'done':

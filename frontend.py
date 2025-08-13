@@ -289,7 +289,8 @@ def serialize_jobs(jobs, current=None):
         "is_playing": (current and j.tid == current.tid),
         "out_path": getattr(j, "out_path", ""),
         "url": getattr(j, "url", ""),
-        "info": getattr(j, "info", {})
+        "info": getattr(j, "info", {}),
+        "error": str(j.error) if j.status == "error" else "",
     } for j in jobs]
 
 def serialize_room(room_id):
@@ -385,10 +386,10 @@ def job_status_callback(updated_job):
                 }, to=rid)
             break
 
-def cb(job, error):
+def cb(job):
     job_status_callback(job)
-    if error:
-        logger.info(f'{job.tid} error: {traceback.format_exc()}')
+    if job.status == 'error':
+        logger.info(f'{job.tid} error: {job.error}')
     elif job.status == 'processing':
         logger.info(f'progress: {100*job.progress:.2f}%')
     elif job.status == 'done':

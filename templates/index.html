@@ -370,6 +370,7 @@
         <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
         <p><strong>Uploader:</strong> <span id="uploaderText"></span></p>
         <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
+        <p id="errorTextContainer"><strong>Error:</strong> <span id="errorText"></span></p>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
     </div></div>
@@ -647,7 +648,8 @@
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
                   data-uploader="${uploader}"
-                  data-thumbnail="${thumbnail}">?</button>`;
+                  data-thumbnail="${thumbnail}"
+                  data-error="${job.error}">?</button>`;
         if (!job.is_playing) html += `<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
         li.innerHTML = html;
         el.appendChild(li);
@@ -672,7 +674,8 @@
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
                   data-uploader="${uploader}"
-                  data-thumbnail="${thumbnail}">?</button>`;
+                  data-thumbnail="${thumbnail}"
+                  data-error="${job.error}">?</button>`;
         html += `<button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;
         li.innerHTML = html;
         el.appendChild(li);
@@ -700,6 +703,8 @@
         }
         document.getElementById("songDurationText").textContent = dur;
         document.getElementById("uploaderText").textContent = t.uploader;
+        document.getElementById("errorText").textContent = t.error;
+        document.getElementById("errorTextContainer").style.display = (t.error.length > 0) ? 'block' : 'none';
         songInfoModal.show();
       }
     });
