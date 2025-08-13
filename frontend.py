@@ -56,6 +56,10 @@ def update_rooms_list():
 def generate_room_id(length=DEFAULT_ROOM_ID_LENGTH):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
+@app.get("/landing")
+def landing():
+    return render_template("landing.html")
+
 @app.route("/")
 def auto_create_room():
     room_id = generate_room_id()

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <title>Karaoke Maker</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+<style>
+  :root {
+    --bg: #f9fafb;
+    --fg: #212529;
+    --muted: #6c757d;
+    --card: #ffffff;
+    --border: #dee2e6;
+    --accent: #ff6b35; /* warm orange */
+  }
+  html, body { height: 100%; }
+  body {
+    color: var(--fg);
+    background: var(--bg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .hero {
+    padding: 10vh 0 6vh;
+    text-align: center;
+  }
+  .hero h1 {
+    font-weight: 800;
+    letter-spacing: .2px;
+  }
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--muted);
+    margin-top: .5rem;
+  }
+  .lede {
+    max-width: 800px;
+    margin: 1.25rem auto 0;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .choices {
+    margin-top: 3rem;
+  }
+  .choice-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    padding: 1.75rem;
+    height: 100%;
+    transition: transform .15s ease, box-shadow .15s ease;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+  }
+  .choice-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.08);
+  }
+  .choice-title {
+    font-weight: 700;
+    margin-bottom: .5rem;
+  }
+  .choice-text {
+    color: var(--muted);
+    margin-bottom: 1.25rem;
+  }
+  .btn-xl {
+    padding: .9rem 1.25rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    border-radius: .9rem;
+  }
+  .btn-accent {
+    background: var(--accent);
+    border: 1px solid transparent;
+    color: #fff;
+  }
+  .btn-accent:hover, .btn-accent:focus {
+    background: #e05b2e;
+    color: #fff;
+  }
+  .footer {
+    color: var(--muted);
+    text-align: center;
+    font-size: .9rem;
+    padding: 2rem 0 3rem;
+  }
+</style>
+</head>
+<body>
+  <main class="container">
+    <section class="hero">
+      <h1 class="display-4">
+        Karaoke Maker
+        <img src="{{ url_for('static', filename='favicon.png') }}" alt="Microphone icon"
+             style="height: 1.2em; vertical-align: middle; margin-left: 0.4rem;">
+      </h1>
+      <p class="subtitle">Ever dreamed of starting a karaoke party from the couch? Here’s your chance.</p>
+
+      <p class="lede">
+        Karaoke Maker is an AI tool that creates karaoke versions of any song in minutes.<br>
+        It can remove vocals, transcribe the lyrics, and sync them to the music video - automatically.
+      </p>
+    </section>
+
+    <section class="choices">
+      <div class="row g-4">
+        <!-- Choice 1 -->
+        <div class="col-12 col-md-6">
+          <div class="choice-card h-100 d-flex flex-column">
+            <h3 class="choice-title">Test on your own!</h3>
+            <p class="choice-text">
+              Single tab to select songs and watch the karaoke videos
+            </p>
+            <div class="mt-auto">
+              <a class="btn btn-accent btn-xl w-100" href="{{ url_for('singlemode') }}">Open Solo Mode</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Choice 2 -->
+        <div class="col-12 col-md-6">
+          <div class="choice-card h-100 d-flex flex-column">
+            <h3 class="choice-title">Create Karaoke Room with Friends!</h3>
+            <p class="choice-text">
+              One tab for the big-screen karaoke video and another for adding & editing the live playlist.
+            </p>
+            <div class="mt-auto">
+              <a class="btn btn-outline-dark btn-xl w-100" href="{{ url_for('auto_create_room') }}">Start a Room</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer">Made with ❤️ By Tal Shahaf & Shahar Pickman</p>
+  </main>
+</body>
+</html>

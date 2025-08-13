@@ -199,7 +199,7 @@
         <button id="nextSongBtn" class="btn btn-danger w-25 me-3">Next ⏭️</button>
       </div>
       <hr class="mt-5">
-      <h3 class="text-center text-secondary">Previous Songs</h3>
+      <h3 id="previousHeader" class="text-center text-secondary">Previous Songs</h3>
       <ul id="previousPlaylist" class="list-group"></ul>
     </div>
   </div>
@@ -210,7 +210,7 @@
   </div>
 
   <template id="playerTemplate">
-    <video id="videoPlayer" autoplay playsinline></video>
+    <video id="videoPlayer" autoplay muted playsinline></video>
 
     <div id="qrMark">
       <img src="/qr_inv?data={{ url_for('singlemode_room', room_id=room_id, _external=True) }}"
@@ -291,6 +291,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const cont = document.getElementById("player-container");
     let currentSrc = "";
 
+  // --- FS scroll restore helpers ---
+  let fsAnchor = null;     // invisible anchor before the player
+  let savedScrollY = null; // fallback absolute scroll
+
+  function ensureFsAnchor() {
+    if (!fsAnchor || !fsAnchor.isConnected) {
+      fsAnchor = document.createElement("span");
+      fsAnchor.setAttribute("aria-hidden", "true");
+      fsAnchor.style.cssText = "position:relative;display:block;width:0;height:0;pointer-events:none;";
+      // insert right before the player container
+      cont.parentNode.insertBefore(fsAnchor, cont);
+    }
+  }
   document.querySelectorAll('#addSongForm label[data-bs-toggle="tooltip"]').forEach(el => {
     bootstrap.Tooltip.getOrCreateInstance(el);
   });
@@ -534,6 +547,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderPrevious(prev) {
+    const header = document.getElementById("previousHeader");
+    header.style.display = (prev && prev.length > 0) ? "" : "none";
     const el = document.getElementById("previousPlaylist");
     el.innerHTML = "";
     prev.forEach((job, i) => {
@@ -685,8 +700,18 @@ const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
                              el.mozRequestFullScreen||el.msRequestFullscreen).call(el);
       const exitFull= () => (document.exitFullscreen||document.webkitExitFullscreen||
                              document.mozCancelFullScreen||document.msExitFullscreen).call(document);
-      const toggleFull = el =>
-        document.fullscreenElement ? exitFull() : reqFull(el);
+      // When entering FS, remember where we are; restoring happens on FS change.
+      const toggleFull = el => {
+        const inFS = document.fullscreenElement || document.webkitFullscreenElement ||
+                     document.mozFullScreenElement || document.msFullscreenElement;
+        if (!inFS) {
+          ensureFsAnchor();
+          savedScrollY = window.scrollY;
+          reqFull(el);
+        } else {
+          exitFull();
+        }
+      };
 
       fsBt.onclick   = ()=> toggleFull(cont);
       vid.ondblclick = ()=> toggleFull(cont);
@@ -718,11 +743,25 @@ const toHMS = s => `${Math.floor(s/60)}:${(s%60|0).toString().padStart(2,"0")}`;
 
       // FS state changes
       function handleFSChange(){
-        const inFS=isFS();
-        qrVisible=inFS; updateQR();
+        const inFS = isFS();
+        qrVisible = inFS; updateQR();
         bar.classList.remove("hideFS");
         clearTimeout(hideTimer);
-        if(inFS) resetHide();
+        if (inFS) {
+          resetHide();
+        } else {
+          // We just EXITED fullscreen → restore scroll position near the player
+          requestAnimationFrame(() => {
+            if (fsAnchor) {
+              fsAnchor.scrollIntoView({ block: "start", inline: "nearest" });
+              // If you have a fixed header, nudge up a bit (e.g., 60px):
+              // window.scrollBy(0, -60);
+            } else if (savedScrollY != null) {
+              window.scrollTo({ top: savedScrollY, behavior: "auto" });
+            }
+            savedScrollY = null;
+          });
+        }
       }
       document.addEventListener("fullscreenchange",handleFSChange);
       document.addEventListener("webkitfullscreenchange", handleFSChange);
