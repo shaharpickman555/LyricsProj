@@ -4,7 +4,7 @@ import random, string, time, pprint
 import re, traceback
 from io import BytesIO
 
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, make_response, send_file, flash, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.utils import secure_filename
 import qrcode
@@ -46,15 +46,47 @@ def get_room(room_id: str):
 def get_validated_room(room_id: str):
     return get_room(room_id) if validate_room_id(room_id) else None
 
-def create_room_if_valid(room_id: str):
+def create_room_if_valid(room_id: str, mode: str = "multi"):
+    created = False
     if room_id not in rooms and validate_room_id(room_id):
-        rooms[room_id] = {"playlist": [], "current_song": None, "previous_songs": []}
+        rooms[room_id] = {
+            "playlist": [],
+            "current_song": None,
+            "previous_songs": [],
+            "mode": mode,
+        }
+        created = True
+    if created:
+        update_rooms_list()
+
 
 def update_rooms_list():
     socketio.emit("rooms_list_updated", list(rooms.keys()))
+    broadcast_monitor_snapshot()
 
 def generate_room_id(length=DEFAULT_ROOM_ID_LENGTH):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+
+def get_monitor_snapshot():
+    items = []
+    for rid, data in rooms.items():
+        mode = data.get("mode", "multi")
+        link = f"/singlemode/{rid}" if mode == "single" else f"/{rid}"
+        playlist = data["playlist"]
+        items.append({
+            "room_id": rid,
+            "mode": mode,  # "single" or "multi"
+            "playlist_count": len(playlist),
+            "previous_count": len(data["previous_songs"]),
+            "current": getattr(data.get("current_song"), "title", None),
+            "in_process": any(j.status == "processing" for j in playlist),
+            "link": link,
+        })
+    return {"total_rooms": len(items), "rooms": items, "ts": time.time()}
+
+
+def broadcast_monitor_snapshot():
+    socketio.emit("monitor_update", get_monitor_snapshot(), to="monitor")
 
 @app.get("/landing")
 def landing():
@@ -66,6 +98,24 @@ def auto_create_room():
     create_room_if_valid(room_id)
     logger.info(f"Auto-created room: {room_id}")
     return redirect(url_for("player", room_id=room_id))
+
+@app.route('/monitoring', methods=['GET', 'POST'])
+def monitoring():
+    if request.method == 'POST':
+        pw = request.form.get('pw', '')
+        if os.path.exists(REBOOT_PW_PATH) and pw == open(REBOOT_PW_PATH, 'r').read().strip():
+            session['monitoring_auth'] = True
+            return redirect(url_for('monitoring'), code=303)
+        else:
+            flash('Wrong password', 'danger')
+    authorized = session.get('monitoring_auth', False)
+    return render_template('monitoring.html', authorized=authorized)
+
+@app.post('/monitoring/logout')
+def monitoring_logout():
+    session.pop('monitoring_auth', None)
+    return redirect(url_for('monitoring'), code=303)
+
 
 @app.route("/api/create_room", methods=["POST"])
 def api_create_room():
@@ -88,6 +138,29 @@ def api_remove_room():
         update_rooms_list()
         return jsonify({"removed": room_id}), 200
     return jsonify({"error": "Room not found"}), 404
+
+@app.get("/api/rooms")
+def api_rooms():
+    payload = []
+    for rid, data in rooms.items():
+        playlist = data.get("playlist", [])
+        prev     = data.get("previous_songs", [])
+        current  = data.get("current_song")
+        in_proc  = any(j.status == "processing" for j in playlist)
+        mode     = data.get("mode", "multi")
+        playlist_url = url_for("index", room_id=rid) if mode == "multi" \
+                       else url_for("singlemode_room", room_id=rid)
+
+        payload.append({
+            "room_id": rid,
+            "mode": mode,                             # "multi" | "single"
+            "num_songs": len(playlist),
+            "num_previous": len(prev),
+            "in_process": in_proc,
+            "current_title": (current.title if current else ""),
+            "playlist_url": playlist_url,
+        })
+    return jsonify(payload), 200
 
 @app.route("/<room_id>")
 def index(room_id):
@@ -123,6 +196,7 @@ def next_song(room_id):
         "current_song": new_current.out_path if new_current else None,
         "in_process": any(j.status == "processing" for j in playlist),
     }, to=room_id)
+    broadcast_monitor_snapshot()
     return "", 204
 
 @app.route("/add_song/<room_id>", methods=["POST"])
@@ -161,6 +235,7 @@ def add_song(room_id):
     data["playlist"].append(job)
     set_queue(data["playlist"])
     socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
+    broadcast_monitor_snapshot()
     return 'Ok', 200
 
 @app.route("/restore_song/<room_id>", methods=["POST"])
@@ -181,6 +256,7 @@ def restore_song(room_id):
     else:
         return jsonify({"error": "Index out of range"}), 400
     socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
+    broadcast_monitor_snapshot()
     return jsonify({"restored": True}), 200
 
 @app.route("/songs/<path:filename>")
@@ -244,6 +320,7 @@ def search_yt(many):
 @app.route("/singlemode")
 def singlemode():
     room_id = generate_room_id()
+    create_room_if_valid(room_id, mode="single")
     return redirect(url_for("singlemode_room", room_id=room_id))
 
 def get_current_song(room_id):
@@ -268,7 +345,6 @@ def get_current_song(room_id):
 
 @app.route("/singlemode/<room_id>")
 def singlemode_room(room_id):
-    create_room_if_valid(room_id)
     data = get_validated_room(room_id)
     if data is None:
         return custom_not_found()
@@ -317,6 +393,7 @@ def handle_join_room(data):
         "current_song": current.out_path if current else None,
         "in_process": any(j.status == "processing" for j in rooms[room_id]["playlist"])
     })
+    broadcast_monitor_snapshot()
 
 @socketio.on("remove_song")
 def handle_remove_song(data):
@@ -329,6 +406,7 @@ def handle_remove_song(data):
         del playlist[i]
         set_queue(playlist)
         socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
+        broadcast_monitor_snapshot()
 
 @socketio.on("reorder_playlist")
 def handle_reorder_playlist(data):
@@ -342,6 +420,13 @@ def handle_reorder_playlist(data):
         playlist.insert(new_index, playlist.pop(old_index))
         set_queue(playlist)
         socketio.emit("playlist_updated", serialize_room(room_id), to=room_id)
+        broadcast_monitor_snapshot()
+
+@socketio.on("monitor_join")
+def handle_monitor_join():
+    join_room("monitor")
+    emit("monitor_update", get_monitor_snapshot())
+
 
 @app.route('/reboot', methods=['GET', 'POST'])
 def reboot():
@@ -364,7 +449,7 @@ def custom_not_found():
     return make_response(
         """<h1>Page not found</h1>
            <p>This page doesn't exist or the URL is incorrect.</p>
-           <p>You can <a href='/'>go back to the main page</a> to create a new room.</p>""",
+           <p>You can <a href='/landing'>go back to the main page</a> to create a new room.</p>""",
         404,
     )
 
@@ -384,6 +469,7 @@ def job_status_callback(updated_job):
                     "current_song": csong.out_path if csong else None,
                     "in_process": any(j.status == "processing" for j in rdata["playlist"]),
                 }, to=rid)
+                broadcast_monitor_snapshot()
             break
 
 def cb(job):
