@@ -181,6 +181,30 @@
       width: 200px; height: 200px; border-radius: .5rem; border: 1px solid var(--border);
       background:#fff; padding:.35rem; box-shadow: var(--shadow);
     }
+    /* Mobile (portrait): keep one row, allow horizontal swipe */
+    @media (max-width: 480px) {
+      .vjs-bar {
+        /* stay on one line */
+        flex-wrap: nowrap;
+        overflow-x: auto;                   /* swipe left/right to see all controls */
+        -webkit-overflow-scrolling: touch;  /* smooth iOS scrolling */
+        scrollbar-width: none;              /* hide scrollbar (Firefox) */
+        gap: .5rem;
+        padding: 6px 8px;
+      }
+      .vjs-bar::-webkit-scrollbar { display: none; } /* hide scrollbar (WebKit) */
+
+      /* prevent items from shrinking or wrapping */
+      .vjs-bar > * { flex: 0 0 auto; }
+      .vjs-btn { white-space: nowrap; font-size: 16px; }
+
+      /* keep the progress a reasonable width so everything fits */
+      #vProgress { width: 45vw; max-width: 240px; min-width: 90px; }
+
+      /* optional: reclaim space if needed on very tight screens */
+      #timeLabel { display: none; }
+    }
+
   </style>
 </head>
 <body>
@@ -201,7 +225,7 @@
     <!-- QR Share -->
     <div class="qr-card">
       <h2>Share This Room</h2>
-      <p class="text-muted mb-3">Scan to open this room’s playlist on your phone.</p>
+      <p class="text-muted mb-3">Scan to edit this room’s playlist on your phone.</p>
       <img class="qr-img"
            src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}"
            width="200" height="200" alt="QR code">
@@ -265,6 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nextBt = cont.querySelector("#btnNext");
     const fsBt   = cont.querySelector("#btnFS");
     const qrBt   = cont.querySelector("#btnQR");
+    const isMobile = window.matchMedia("(max-width: 480px)").matches;
     const qrBox  = cont.querySelector("#qrMark");
     const prog   = cont.querySelector("#vProgress");
     const label  = cont.querySelector("#timeLabel");
@@ -272,6 +297,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const dlBt   = cont.querySelector("#btnDL");
     const bar    = cont.querySelector(".vjs-bar");
 
+    function updateQR(){
+      qrBox.style.display = qrVisible ? "block" : "none";
+      qrBt.textContent = qrVisible ? (isMobile ? "QR ✓" : "Hide QR")
+                                       : (isMobile ? "QR"    : "Show QR");
+    }
     /* -------- video src --------------- */
     vid.src = "/"+src;
     dlBt.href = "/"+src;

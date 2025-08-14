@@ -26,15 +26,27 @@
       --accent-contrast: #ffffff;
       --ring: rgba(255,107,53,.22);
     }
-    input[type="radio"],
-    input[type="checkbox"] {
-      accent-color: var(--accent);
-    }
-
-    /* Also handle Bootstrap's custom form controls */
-    .form-check-input:checked {
+    input[type="checkbox"] { accent-color: var(--accent); }
+    .form-check-input[type="checkbox"]:checked {
       background-color: var(--accent);
       border-color: var(--accent);
+    }
+
+    /* ● Radios = Bootstrap-style SVG dot so the size stays perfect */
+    .form-check-input[type="radio"] {
+      background-color: #fff;             /* keep pill white */
+      border-color: var(--border);
+    }
+    .form-check-input[type="radio"]:checked {
+      border-color: var(--accent);
+      background-color: #fff;             /* don't flood-fill */
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='2' fill='%23ff6b35'/%3e%3c/svg%3e");
+    }
+
+    /* Matching focus ring (optional but nice) */
+    .form-check-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 .25rem var(--ring);
     }
     .form-check-input:focus {
       border-color: var(--accent);
@@ -277,10 +289,10 @@
 
       <div class="mb-3">
         <label class="form-check-label me-3">
-          <input type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube
+          <input class="form-check-input" type="radio" name="source" value="youtube" checked id="sourceYoutube"> YouTube
         </label>
         <label class="form-check-label">
-          <input type="radio" name="source" value="local" id="sourceLocal"> Local File
+          <input class="form-check-input" type="radio" name="source" value="local" id="sourceLocal"> Local File
         </label>
       </div>
 
@@ -299,13 +311,13 @@
 
       <div class="mt-3">
         <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Create lyrics + Remove vocals">
-          <input type="radio" name="keep" value="nothing" checked> Full Karaoke
+          <input class="form-check-input" type="radio" name="keep" value="nothing" checked> Full Karaoke
         </label>
         <label class="form-check-label me-3" data-bs-toggle="tooltip" title="Remove vocals only, without lyrics">
-          <input type="radio" name="keep" value="video"> Remove Vocals
+          <input class="form-check-input" type="radio" name="keep" value="video"> Remove Vocals
         </label>
         <label class="form-check-label" data-bs-toggle="tooltip" title="Add the video to the playlist as is">
-          <input type="radio" name="keep" value="all"> Keep Video
+          <input class="form-check-input" type="radio" name="keep" value="all"> Keep Video
         </label>
       </div>
 
@@ -441,7 +453,7 @@
           tooltip.disable();
         } else {
           addSongBtn.disabled = true;
-          addSongWrapper.setAttribute("data-bs-original-title","You need to choose a local audio file first");
+          addSongWrapper.setAttribute("data-bs-original-title","You need to choose a local file first");
           tooltip.enable();
         }
       } else {
