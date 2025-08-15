@@ -269,6 +269,7 @@
       #vProgress { width: 45vw; max-width: 240px; min-width: 90px; }
       #timeLabel { display: none; }
     }
+    #nicknameSection { display: none; }
     /* YouTube search modal cards (match index.html) */
     .youtube-result-card.card {
       transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
@@ -302,6 +303,7 @@
     <h1 id="pageTitle"></h1>
 
     <!-- Name line (shown, like index) -->
+    <div id="nicknameSection">
     <div class="d-flex justify-content-start align-items-center mb-3" style="gap:.5rem;">
       <label for="nicknameInput" class="fw-bold mb-0">Name:</label>
       <input type="text" id="nicknameInput" class="form-control"
@@ -309,7 +311,7 @@
       <button id="saveNameBtn" class="btn btn-sm btn-outline-secondary"
               style="font-size:0.8rem;padding:0.25rem .6rem;border-radius:.6rem;">Save</button>
     </div>
-
+    </div>
     <!-- Add song form (same styling as index) -->
     <form id="addSongForm" action="{{ url_for('add_song', room_id=room_id) }}"
           method="POST" enctype="multipart/form-data" class="p-3">
@@ -399,7 +401,7 @@
   </div>
 
   <!-- Player below (same component as player.html) -->
-  <div class="container text-center">
+  <div class="container text-center pb-5">
     <div id="player-container"></div>
   </div>
 
