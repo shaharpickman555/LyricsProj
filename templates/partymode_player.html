@@ -227,7 +227,7 @@
       <h2>Share This Room</h2>
       <p class="text-muted mb-3">Scan to edit this room’s playlist on your phone.</p>
       <img class="qr-img"
-           src="/qr?data={{ url_for('index', room_id=room_id, _external=True) }}"
+           src="/qr?data={{ url_for('partymode_playlist', room_id=room_id, _external=True) }}"
            width="200" height="200" alt="QR code">
     </div>
   </div>
@@ -237,7 +237,7 @@
     <video id="videoPlayer" autoplay muted playsinline></video>
 
     <div id="qrMark">
-      <img src="/qr_inv?data={{ url_for('index', room_id=room_id, _external=True) }}" alt="QR code">
+      <img src="/qr_inv?data={{ url_for('partymode_playlist', room_id=room_id, _external=True) }}" alt="QR code">
     </div>
 
     <div class="vjs-bar">
