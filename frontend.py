@@ -88,16 +88,16 @@ def get_monitor_snapshot():
 def broadcast_monitor_snapshot():
     socketio.emit("monitor_update", get_monitor_snapshot(), to="monitor")
 
-@app.get("/landing")
+@app.get("/")
 def landing():
     return render_template("landing.html")
 
-@app.route("/")
+@app.route("/partymode")
 def auto_create_room():
     room_id = generate_room_id()
     create_room_if_valid(room_id)
     logger.info(f"Auto-created room: {room_id}")
-    return redirect(url_for("player", room_id=room_id))
+    return redirect(url_for("partymode_player", room_id=room_id))
 
 @app.route('/monitoring', methods=['GET', 'POST'])
 def monitoring():
@@ -148,7 +148,7 @@ def api_rooms():
         current  = data.get("current_song")
         in_proc  = any(j.status == "processing" for j in playlist)
         mode     = data.get("mode", "multi")
-        playlist_url = url_for("index", room_id=rid) if mode == "multi" \
+        playlist_url = url_for("partymode_playlist", room_id=rid) if mode == "multi" \
                        else url_for("singlemode_room", room_id=rid)
 
         payload.append({
@@ -162,21 +162,21 @@ def api_rooms():
         })
     return jsonify(payload), 200
 
-@app.route("/<room_id>")
-def index(room_id):
+@app.route("/partymode/<room_id>")
+def partymode_playlist(room_id):
     data = get_validated_room(room_id)
     if data is None:
         return custom_not_found()
     current = get_current_song(room_id)
-    return render_template("index.html", playlist=data["playlist"], current_song=current, room_id=room_id, languages=ALLOWED_LANGUAGE_HINTS)
+    return render_template("partymode_playlist.html", playlist=data["playlist"], current_song=current, room_id=room_id, languages=ALLOWED_LANGUAGE_HINTS)
 
-@app.route("/player/<room_id>")
-def player(room_id):
+@app.route("/partymode/player/<room_id>")
+def partymode_player(room_id):
     data = get_validated_room(room_id)
     if data is None:
         return custom_not_found()
     current = get_current_song(room_id)
-    return render_template("player.html", current_song=current, room_id=room_id)
+    return render_template("partymode_player.html", current_song=current, room_id=room_id)
 
 @app.route("/next_song/<room_id>", methods=["POST"])
 def next_song(room_id):
@@ -449,7 +449,7 @@ def custom_not_found():
     return make_response(
         """<h1>Page not found</h1>
            <p>This page doesn't exist or the URL is incorrect.</p>
-           <p>You can <a href='/landing'>go back to the main page</a> to create a new room.</p>""",
+           <p>You can <a href='/'>go back to the main page</a> to create a new room.</p>""",
         404,
     )
 
