@@ -632,15 +632,15 @@ WrapStyle: 1
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Alignment, Encoding, BorderStyle, Outline, Shadow, MarginL, MarginR, MarginV
-Style: W1, Assistant, 150, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
-Style: W2, Assistant, 80, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
+Style: W1, Assistant, 80, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
+Style: W2, Assistant, 60, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
 
 [Events]
 Format: Layer, Start, End, Style, Text
 '''
     
-    title_limit = 18
-    subtitle_limit = 30
+    title_limit = 30
+    subtitle_limit = 40
     
     if len(title) > title_limit:
         title = title[:title_limit-3] + '...'
