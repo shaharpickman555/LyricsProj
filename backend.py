@@ -1,4 +1,4 @@
-import time, itertools, pprint, subprocess, sys, tempfile
+import time, itertools, pprint, subprocess, sys
 import math, os, collections, re, hashlib, base64
 import shutil, threading, ctypes, traceback, inspect
 import stat, logging, signal, argparse, gc, datetime
@@ -595,11 +595,14 @@ def bg_with_subtitles(bg_path, width, height, duration, subtitles_path, output_p
                 '-map', '[v]:v', '-map', '1:a', output_path)
 
 def video_concat(video_paths, output_path):
-    with tempfile.NamedTemporaryFile(dir=local_cache_dir, suffix='.txt', mode='w', encoding='utf8', delete_on_close=False) as fh:
-        fh.write('\n'.join(f"file '{os.path.abspath(video_path)}'" for video_path in video_paths))
-        fh.close()
-        
-        run_process(ffmpeg_path, '-y', '-f', 'concat', '-safe', '0', '-i', fh.name, '-c', 'copy', output_path)
+    list_path = replace_ext(output_path, '_list.txt')
+    try:
+        with open(list_path, 'w', encoding='utf8') as fh:
+            fh.write('\n'.join(f"file '{os.path.abspath(video_path)}'" for video_path in video_paths))
+            
+        run_process(ffmpeg_path, '-y', '-f', 'concat', '-safe', '0', '-i', list_path, '-c', 'copy', output_path)
+    finally:
+        try_remove(list_path)
     
 def try_remove(path):
     try:
