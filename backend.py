@@ -602,7 +602,7 @@ def reencode_video(videopath, outputpath):
     
 def bg_with_subtitles(bg_path, width, height, video_timebase, audio_timebase, duration, subtitles_path, output_path, h_to_w_ratio=None, min_width=None):
     run_process(ffmpeg_path, '-y',
-                *(['-loop', '1', '-i', bg_path, '-f', 'lavfi', '-i', f'anullsrc=cl=stereo:r={audio_timebase}'] if bg_path is not None else ['-f', 'lavfi', '-i', f'color=c=black:s={w}x{h}',
+                *(['-loop', '1', '-i', bg_path, '-f', 'lavfi', '-i', f'anullsrc=cl=stereo:r={audio_timebase}'] if bg_path is not None else ['-f', 'lavfi', '-i', f'color=c=black:s={width}x{height}',
                 '-f', 'lavfi', '-i', f'anullsrc=cl=stereo:r={audio_timebase}', '-loop', '1']), '-video_track_timescale', str(video_timebase), *video_codec_options,
                 '-t', str(duration), '-pix_fmt', 'yuv420p', '-filter_complex',
                 f'fps=30[v0]; [v0]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v1]; [v1]ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex[v]',
@@ -644,8 +644,10 @@ Format: Layer, Start, End, Style, Text
     
     if len(title) > title_limit:
         title = title[:title_limit-3] + '...'
-    if len(subtitle) > subtitle_limit:
-        subtitle = subtitle[:subtitle_limit-3] + '...'
+    
+    if subtitle:
+        if len(subtitle) > subtitle_limit:
+            subtitle = subtitle[:subtitle_limit-3] + '...'
         
     title_start = 0
     subtitle_start = 0.3
@@ -655,7 +657,8 @@ Format: Layer, Start, End, Style, Text
     transition_time = 0.15
     
     title, direction = output_title(title)
-    subtitle, _ = output_title(subtitle)
+    if subtitle:
+        subtitle, _ = output_title(subtitle)
     
     if direction == 'rtl':
         start_pos = 1200
@@ -672,10 +675,13 @@ Format: Layer, Start, End, Style, Text
         f'Dialogue: 1, {ass_time(title_start)}, {ass_time(title_start + transition_time)}, W1, {{\\move({start_pos}, 350, {mid_pos}, 350, 0, {int(transition_time * 1000)})}}{title}',
         f'Dialogue: 1, {ass_time(title_start + transition_time)}, {ass_time(title_start + transition_time + title_stay)}, W1, {{\\move({mid_pos}, 350, {mid_pos + (sign * 30)}, 350, 0, {int(title_stay * 1000)})}}{title}',
         f'Dialogue: 1, {ass_time(title_start + transition_time + title_stay)}, {ass_time(title_start + (transition_time * 2) + title_stay)}, W1, {{\\move({mid_pos + (sign * 30)}, 350, {end_pos}, 350, 0, {int(transition_time * 1000)})}}{title}',
-        f'Dialogue: 2, {ass_time(subtitle_start)}, {ass_time(subtitle_start + transition_time)}, W2, {{\\move({start_pos}, 450, {mid_pos}, 450, 0, {int(transition_time * 1000)})}}{subtitle}',
-        f'Dialogue: 2, {ass_time(subtitle_start + transition_time)}, {ass_time(subtitle_start + transition_time + subtitle_stay)}, W2, {{\\move({mid_pos}, 450, {mid_pos + (sign * 30)}, 450, 0, {int(subtitle_stay * 1000)})}}{subtitle}',
-        f'Dialogue: 2, {ass_time(subtitle_start + transition_time + subtitle_stay)}, {ass_time(subtitle_start + (transition_time * 2) + subtitle_stay)}, W2, {{\\move({mid_pos + (sign * 30)}, 450, {end_pos}, 450, 0, {int(transition_time * 1000)})}}{subtitle}',
     ]
+    if subtitle:
+        lines.extend([
+            f'Dialogue: 2, {ass_time(subtitle_start)}, {ass_time(subtitle_start + transition_time)}, W2, {{\\move({start_pos}, 450, {mid_pos}, 450, 0, {int(transition_time * 1000)})}}{subtitle}',
+            f'Dialogue: 2, {ass_time(subtitle_start + transition_time)}, {ass_time(subtitle_start + transition_time + subtitle_stay)}, W2, {{\\move({mid_pos}, 450, {mid_pos + (sign * 30)}, 450, 0, {int(subtitle_stay * 1000)})}}{subtitle}',
+            f'Dialogue: 2, {ass_time(subtitle_start + transition_time + subtitle_stay)}, {ass_time(subtitle_start + (transition_time * 2) + subtitle_stay)}, W2, {{\\move({mid_pos + (sign * 30)}, 450, {end_pos}, 450, 0, {int(transition_time * 1000)})}}{subtitle}',
+        ])
     
     ass = header + '\n'.join(lines)
     
@@ -767,7 +773,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
             w, h = video_with_audio_and_subtitles(inputpath, output_audio_path, video_out_path, subtitles_path=asspath)
             
         if title_info is not None:
-            if 'bg' in title_info:
+            if title_info.get('bg'):
                 thumbnail_out_path = replace_ext(inputpath, '_thumb.png')
                 download_file(title_info['bg'], thumbnail_out_path)
             
@@ -926,7 +932,7 @@ class Job:
     no_cache : bool = False
     lang_hint : str = None
     blank_video : bool = False
-    uploader : str = None
+    uploader : str = ''
     arg : dict = None
     
     #can change
@@ -939,9 +945,6 @@ class Job:
         if self.keep not in ('nothing', 'video', 'all'):
             raise ValueError('job.keep must be one of: nothing, video, all')
             
-        if not self.uploader:
-            raise ValueError('uploader must be supplied')
-            
         not_nones = int(self.url is not None) + int(self.path is not None) + int(self.data is not None)
         if not_nones != 1:
             raise ValueError('must supply: job.url, job.path, job.data')
@@ -951,25 +954,26 @@ class Job:
         if self.arg is None:
             object.__setattr__(self, 'arg', {})
             
-        if self.title is None:
-            if self.url:
-                id, title, info, download_path = youtube_info(self.url, audio_only=(self.keep == 'nothing' and self.blank_video))
-                canon_path = canonify_input_file(download_path.encode('latin-1')) #don't delete youtube video file afterwards, but also just use path for hashing
-            elif self.path:
-                title = os.path.splitext(os.path.basename(self.path))[0]
-                info = dict(size=os.path.getsize(self.path))
-                canon_path = canonify_input_file(open(self.path, 'rb').read())
-            elif self.data:
-                title = digest(content=self.data)[:8]
-                info = dict(size=len(self.data))
-                canon_path = canonify_input_file(job.data)
-                
-            if getattr(info, 'duration', 0) > max_job_duration or getattr(info, 'size', 0) > max_job_filesize:
-                raise ValueError('Job too big')
+        
+        if self.url:
+            id, title, info, download_path = youtube_info(self.url, audio_only=(self.keep == 'nothing' and self.blank_video))
+            canon_path = canonify_input_file(download_path.encode('latin-1')) #don't delete youtube video file afterwards, but also just use path for hashing
+        elif self.path:
+            title = os.path.splitext(os.path.basename(self.path))[0]
+            info = dict(size=os.path.getsize(self.path))
+            canon_path = canonify_input_file(open(self.path, 'rb').read())
+        elif self.data:
+            title = digest(content=self.data)[:8]
+            info = dict(size=len(self.data))
+            canon_path = canonify_input_file(job.data)
             
+        if getattr(info, 'duration', 0) > max_job_duration or getattr(info, 'size', 0) > max_job_filesize:
+            raise ValueError('Job too big')
+        
+        if self.title is None:
             object.__setattr__(self, 'title', title)
-            object.__setattr__(self, 'info', info)
-            object.__setattr__(self, 'canon_path', canon_path)
+        object.__setattr__(self, 'info', info)
+        object.__setattr__(self, 'canon_path', canon_path)
             
     def __eq__(self, other):
         return self.tid == getattr(other, 'tid', None)
@@ -992,7 +996,15 @@ class Job:
             # we don't have a file to process
             is_video, is_audio = not (self.keep == 'nothing' and self.blank_video), True
         else:
-            is_video, is_audio = is_video_audio(self.canon_path)
+            if os.path.exists(self.canon_path):
+                path = self.canon_path
+            elif os.path.exists(self.path):
+                path = self.path
+            else:
+                path = None
+                is_video, is_audio = True, True
+            if path:
+                is_video, is_audio = is_video_audio(path)
             if not is_video and not is_audio:
                 raise ValueError('Input is not a video or an audio file')
             
@@ -1195,7 +1207,7 @@ def cancel_job(job):
 def thread_test():
     def cb(job):
         if job.status == 'error':
-            logger.info(f'{job.tid} error: {job.error}')
+            logger.info(f'{job.tid} error: {job.error} {"".join(traceback.format_exception(job.error))}')
         elif job.status == 'processing':
             logger.info(f'progress: {100*job.progress:.2f}%')
         elif job.status == 'done':

@@ -214,8 +214,6 @@ def add_song(room_id):
     
     #TODO sanitize uploader
     uploader = re.sub(r'[<>]', '', uploader)
-    if not uploader:
-        uploader = 'unknown'
     
     job_params = dict(uploader=uploader, keep=keep_val)
 
@@ -486,7 +484,7 @@ def job_status_callback(updated_job):
 def cb(job):
     job_status_callback(job)
     if job.status == 'error':
-        logger.info(f'{job.tid} error: {job.error}')
+        logger.info(f'{job.tid} error: {job.error} {"".join(traceback.format_exception(job.error))}')
     elif job.status == 'processing':
         logger.info(f'progress: {100*job.progress:.2f}%')
     elif job.status == 'done':
