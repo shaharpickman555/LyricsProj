@@ -596,7 +596,7 @@ def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_p
     return w, h
 
 def reencode_video(videopath, outputpath):
-    w, h = video_resolution(video_path)
+    w, h = video_resolution(videopath)
     run_process(ffmpeg_path, '-y', '-i', videopath, '-c:v', 'copy', *video_codec_options, outputpath)
     return w, h
     
