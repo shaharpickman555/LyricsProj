@@ -424,6 +424,7 @@
     let storedName = localStorage.getItem("karaokeNickname");
     if (!storedName || !storedName.trim()) storedName = generateCoolNickname();
     nicknameInput.value = storedName;
+    uploaderField.value = storedName;
     updatePageTitle(storedName);
 
     saveNameBtn.addEventListener("click", () => {
@@ -431,6 +432,7 @@
       if (!newName) newName = generateCoolNickname();
       localStorage.setItem("karaokeNickname", newName);
       nicknameInput.value = newName;
+      uploaderField.value = newName;
       updatePageTitle(newName);
     });
 
@@ -618,7 +620,6 @@
       el.innerHTML = "";
       pl.forEach((job, i) => {
         const safe      = job.title.replace(/"/g,"&quot;");
-        const uploader  = localStorage.getItem("karaokeNickname") || "";
         const thumbnail = job.info?.thumbnail || "";
 
         const li = document.createElement("li");
@@ -647,7 +648,7 @@
                   data-title="${safe}"
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
-                  data-uploader="${uploader}"
+                  data-uploader="${job.uploader}"
                   data-thumbnail="${thumbnail}"
                   data-error="${job.error}">?</button>`;
         if (!job.is_playing) html += `<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
@@ -667,13 +668,12 @@
         li.className = "list-group-item d-flex justify-content-between align-items-center";
         let html = `<div class="flex-grow-1 text-start">${job.title}</div>`;
         const safe      = job.title.replace(/"/g,"&quot;");
-        const uploader  = localStorage.getItem("karaokeNickname") || "Unknown";
         const thumbnail = job.info?.thumbnail || "";
         html += `<button type="button" class="btn btn-sm btn-info me-2 info-btn"
                   data-title="${safe}"
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
-                  data-uploader="${uploader}"
+                  data-uploader="${job.uploader}"
                   data-thumbnail="${thumbnail}"
                   data-error="${job.error}">?</button>`;
         html += `<button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;

@@ -133,7 +133,14 @@ def add_song(room_id):
     youtube_url = request.form.get("youtube_url", "").strip().split('&')[0]
     local_file = request.files.get("local_file")
     keep_val = request.form.get("keep", "nothing")
-    job_params = dict(keep=keep_val)
+    uploader = request.form.get("uploader", "")
+    
+    #TODO sanitize uploader
+    uploader = re.sub(r'[<>]', '', uploader)
+    if not uploader:
+        uploader = 'unknown'
+    
+    job_params = dict(uploader=uploader, keep=keep_val)
 
     if request.form.get("no_cache"):
         job_params["no_cache"] = True
@@ -284,6 +291,7 @@ def singlemode_room(room_id):
 def serialize_jobs(jobs, current=None):
     return [{
         "title": j.title,
+        "uploader": j.uploader,
         "status": j.status,
         "progress": j.progress,
         "is_playing": (current and j.tid == current.tid),

@@ -1,4 +1,4 @@
-import time, itertools, pprint, subprocess, sys
+import time, itertools, pprint, subprocess, sys, tempfile
 import math, os, collections, re, hashlib, base64
 import shutil, threading, ctypes, traceback, inspect
 import stat, logging, signal, argparse, gc, datetime
@@ -43,6 +43,8 @@ default_model_type = 'faster'
 
 max_local_dir_size = 1024 ** 3
 max_local_dir_num_files = 10
+
+DOWNLOAD_FILE_USER_AGENT = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1'
 
 YOUTUBE_DOWNLOAD_PROGRESS = 0.1 #10% download, 90% everything else
 
@@ -244,6 +246,13 @@ def replace_ext(path, ext):
     if '.' not in path:
         return f'{path}{ext}'
     return f'{path[:path.rfind(".")]}{ext}'
+
+def download_file(url, path):
+    resp = requests.get(url, headers={'User-Agent': DOWNLOAD_FILE_USER_AGENT}, stream=True)
+    with open(path, 'wb') as f:
+        for chunk in resp.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
     
 def youtube_info(url, audio_only=True):
     yt_opts = {
@@ -260,10 +269,16 @@ def youtube_info(url, audio_only=True):
             (t for t in info['thumbnails'] if 'height' in t),
             key=lambda t: t['height']
         )['url']
+        
+        thumbnail_hq = max(
+            (t for t in info['thumbnails'] if 'height' in t),
+            key=lambda t: t['height']
+        )['url']
     except ValueError:
         thumbnail = info['thumbnails'][0]['url']
+        thumbnail_hq = thumbnail
 
-    return info['id'], info['title'], dict(duration=info['duration'], thumbnail=thumbnail), f'{info["id"]}.{"mp3" if audio_only else "mp4"}'
+    return info['id'], info['title'], dict(duration=info['duration'], thumbnail=thumbnail, thumbnail_hq=thumbnail_hq), f'{info["id"]}.{"mp3" if audio_only else "mp4"}'
 
 def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress_cb=None):
     if progress_cb:
@@ -348,22 +363,22 @@ def ass_time(seconds):
 
 def output_word(word):
     if dominant_strong_direction(word) == 'rtl':
-        punc = '.,;:/\\?!'
+        punc = ['.', ',', ';', ':', '/', '\\', '?', '!', '"', "'", '...']
         word = word.strip()
         
-        startswith = any(word.startswith(p) for p in punc)
-        endswith = any(word.endswith(p) for p in punc)
+        startswith = max(len(p) if word.startswith(p) else 0 for p in punc)
+        endswith = max(len(p) if word.endswith(p) else 0 for p in punc)
         
-        if startswith and endswith:
-            word = word[-1] + word[1:-1] + word[0]
-        elif startswith:
-            word = word[1:] + word[0]
-        elif endswith:
-            word = word[-1] + word[:-1]
+        word = word[-endswith:] + word[startswith : -endswith] + word[:startswith]
             
         return word
     else:
         return word.strip()
+
+def output_title(title):
+    words = title.split(' ')
+    direction = dominant_strong_direction(''.join(w for w in words))
+    return r'{\q2}' + ' '.join(output_word(w) for w in words), direction
     
 def output_line(words, selected_word):
     text_wrap = r'{{\c&H{color}&}}{text}{{\r}}'
@@ -493,13 +508,16 @@ Format: Layer, Start, End, Style, Text
         last_segment_end = segment[-1][-1].end
 
     return header + '\n'.join(ass_lines)
-        
+    
 def run_process(*args):
     process = subprocess.run(args, capture_output=True)
     if process.returncode != 0:
         raise RuntimeError(f'process failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
     return process.stdout.decode("utf8", errors="ignore")
-        
+
+def extract_audio(input, output_audio):
+    run_process(ffmpeg_path, '-y', '-i', input, '-vn', output_audio)
+    
 def is_video_audio(input):
     output_video = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
     output_audio = run_process('ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
@@ -508,23 +526,13 @@ def is_video_audio(input):
 def video_resolution(input):
     output_res = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=s=x:p=0', input)
     return tuple(int(n) for n in output_res.split('x'))
-        
-def extract_audio(input, output_audio):
-    run_process(ffmpeg_path, '-y', '-i', input, '-vn', output_audio)
-    
-def audio_with_blank(audiopath, outputpath, subtitles_path=None):
-    run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'subtitles={subtitles_path}:fontsdir=fonts'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
 
-video_codec_options = ['-vcodec', 'h264_nvenc']
-#video_codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
-    
-def video_with_audio(videopath, audiopath, outputpath, max_width=1080):
-    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
-                '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex', 
-                f'scale=max({max_width}\\, iw):-2[v]', '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart',
-                *video_codec_options, outputpath)
-    
-def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_path, h_to_w_ratio=9/16, min_width=1080):
+def video_best_resolution(videopath, h_to_w_ratio=None, min_width=None):
+    if h_to_w_ratio is None:
+        h_to_w_ratio = 9/16
+    if min_width is None:
+        min_width = 1080
+        
     w, h = video_resolution(videopath)
     
     #scale to min_width
@@ -546,13 +554,52 @@ def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_p
     if w % 2 != 0:
         w += 1
         
+    return w, h
+    
+    
+def audio_with_blank(audiopath, outputpath, subtitles_path=None):
+    run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
+    return 1280, 720
+    
+video_codec_options = ['-vcodec', 'h264_nvenc']
+#video_codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
+    
+def video_with_audio(videopath, audiopath, outputpath, h_to_w_ratio=None, min_width=None):
+    w, h = video_best_resolution(videopath, h_to_w_ratio, min_width)
+        
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
+                '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex', 
+                f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v];', '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart',
+                *video_codec_options, outputpath)
+    return w, h
+    
+def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_path, h_to_w_ratio=None, min_width=None):
+    w, h = video_best_resolution(videopath, h_to_w_ratio, min_width)
+        
     run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
                 '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex',
-                f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]; [v0]subtitles={subtitles_path}:fontsdir=fonts[v]',
-                '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart',*video_codec_options, outputpath)
+                f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]; [v0]ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex[v]',
+                '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart', *video_codec_options, outputpath)
+    return w, h
 
 def reencode_video(videopath, outputpath):
+    w, h = video_resolution(video_path)
     run_process(ffmpeg_path, '-y', '-i', videopath, '-c:v', 'copy', *video_codec_options, outputpath)
+    return w, h
+
+    
+def bg_with_subtitles(bg_path, width, height, duration, subtitles_path, output_path, h_to_w_ratio=None, min_width=None):
+    run_process(ffmpeg_path, '-y', *(['-loop', '1', '-i', bg_path, '-f', 'lavfi', '-i', 'anullsrc=cl=stereo:r=44100'] if bg_path is not None else ['-f', 'lavfi', '-i', f'color=c=black:s={w}x{h}', '-f', 'lavfi', '-i', 'anullsrc=cl=stereo:r=44100', '-loop', '1']), *video_codec_options,
+                '-t', str(duration), '-pix_fmt', 'yuv420p', '-filter_complex',
+                f'fps=30[v0]; [v0]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v1]; [v1]ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex[v]',
+                '-map', '[v]:v', '-map', '1:a', output_path)
+
+def video_concat(video_paths, output_path):
+    with tempfile.NamedTemporaryFile(dir=local_cache_dir, suffix='.txt', mode='w', encoding='utf8', delete_on_close=False) as fh:
+        fh.write('\n'.join(f"file '{os.path.abspath(video_path)}'" for video_path in video_paths))
+        fh.close()
+        
+        run_process(ffmpeg_path, '-y', '-f', 'concat', '-safe', '0', '-i', fh.name, '-c', 'copy', output_path)
     
 def try_remove(path):
     try:
@@ -560,7 +607,69 @@ def try_remove(path):
     except FileNotFoundError:
         pass
 
-def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals_in_inst=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, **_):
+def make_title_video(bg_path, width, height, title, subtitle, output_path):
+    header = '''[Script Info]
+PlayResX: 800
+PlayResY: 800
+WrapStyle: 1
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Alignment, Encoding, BorderStyle, Outline, Shadow, MarginL, MarginR, MarginV
+Style: W1, Assistant, 150, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
+Style: W2, Assistant, 80, &HFFFFFF, &HFFFFFF, &H000000, &H000000, 5, 0, 0, 15, 1, 30, 30, 30
+
+[Events]
+Format: Layer, Start, End, Style, Text
+'''
+    
+    title_limit = 18
+    subtitle_limit = 30
+    
+    if len(title) > title_limit:
+        title = title[:title_limit-3] + '...'
+    if len(subtitle) > subtitle_limit:
+        subtitle = subtitle[:subtitle_limit-3] + '...'
+        
+    title_start = 0
+    subtitle_start = 0.3
+    title_stay = 4
+    subtitle_stay = 4
+    end_wait = 1
+    
+    title, direction = output_title(title)
+    subtitle, _ = output_title(subtitle)
+    
+    if direction == 'rtl':
+        start_pos = 900
+        mid_pos = 400
+        end_pos = -100
+        sign = -1
+    else:
+        start_pos = -100
+        mid_pos = 400
+        end_pos = 900
+        sign = 1
+
+    lines = [
+        f'Dialogue: 1, {ass_time(title_start)}, {ass_time(title_start + 0.1)}, W1, {{\\move({start_pos}, 350, {mid_pos}, 350, 0, 100)}}{title}',
+        f'Dialogue: 1, {ass_time(title_start + 0.1)}, {ass_time(title_start + 0.1 + title_stay)}, W1, {{\\move({mid_pos}, 350, {mid_pos + (sign * 30)}, 350, 0, {int(title_stay * 1000)})}}{title}',
+        f'Dialogue: 1, {ass_time(title_start + 0.1 + title_stay)}, {ass_time(title_start + 0.2 + title_stay)}, W1, {{\\move({mid_pos + (sign * 30)}, 350, {end_pos}, 350, 0, 100)}}{title}',
+        f'Dialogue: 2, {ass_time(subtitle_start)}, {ass_time(subtitle_start + 0.1)}, W2, {{\\move({start_pos}, 450, {mid_pos}, 450, 0, 100)}}{subtitle}',
+        f'Dialogue: 2, {ass_time(subtitle_start + 0.1)}, {ass_time(subtitle_start + 0.1 + subtitle_stay)}, W2, {{\\move({mid_pos}, 450, {mid_pos + (sign * 30)}, 450, 0, {int(subtitle_stay * 1000)})}}{subtitle}',
+        f'Dialogue: 2, {ass_time(subtitle_start + 0.1 + subtitle_stay)}, {ass_time(subtitle_start + 0.2 + subtitle_stay)}, W2, {{\\move({mid_pos + (sign * 30)}, 450, {end_pos}, 450, 0, 100)}}{subtitle}',
+    ]
+    
+    ass = header + '\n'.join(lines)
+    
+    ass_path = replace_ext(output_path, '_title.ass')
+    try:
+        with open(ass_path, 'w', encoding='utf8') as fh:
+            fh.write(ass)
+        bg_with_subtitles(bg_path, width, height, subtitle_start + subtitle_stay + end_wait, ass_path, output_path)
+    finally:
+        try_remove(ass_path)
+    
+def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals_in_inst=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, title_info=None, **_):
     global whisper_model_framework
     
     if not transcribe_using_vocals and transcribe_with_backup_vocals:
@@ -587,6 +696,10 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
         asspath = replace_ext(inputpath, '.ass')
         instpath = replace_ext(inputpath, '_inst.mp3')
         vocalspath = replace_ext(inputpath, '_vocals.mp3') if transcribe_using_vocals else None
+        thumbnail_out_path = None
+        notitle_out_path = replace_ext(inputpath, '_notitle.mp4')
+        title_out_path = replace_ext(inputpath, '_title.mp4')
+        video_out_path = notitle_out_path if title_info is not None else outputpath
         
         extract_audio(inputpath, audiopath)
         
@@ -627,23 +740,37 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
             fh.write(assdata)
         
         output_audio_path = audiopath if original_audio else instpath
-        
+
         if blank_video:
-            audio_with_blank(output_audio_path, outputpath, asspath)
+            w, h = audio_with_blank(output_audio_path, video_out_path, asspath)
         else:
-            video_with_audio_and_subtitles(inputpath, output_audio_path, outputpath, subtitles_path=asspath)
+            w, h = video_with_audio_and_subtitles(inputpath, output_audio_path, video_out_path, subtitles_path=asspath)
+            
+        if title_info is not None:
+            if 'bg' in title_info:
+                thumbnail_out_path = replace_ext(inputpath, '_thumb.png')
+                download_file(title_info['bg'], thumbnail_out_path)
+            
+            make_title_video(thumbnail_out_path, w, h, title_info['title'], title_info['subtitle'], title_out_path)
+            video_concat([title_out_path, notitle_out_path], outputpath)
+            
     finally:
         if remove_intermediates:
             try_remove(audiopath)
             try_remove(asspath)
             try_remove(instpath)
+            if title_info is not None:
+                if thumbnail_out_path:
+                    try_remove(thumbnail_out_path)
+                try_remove(notitle_out_path)
+                try_remove(title_out_path)
             if vocalspath:
                 try_remove(vocalspath)
     
     if progress_cb:
         progress_cb(1.0)
 
-def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, blank_video=False, **_):
+def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, blank_video=False, title_info=None, **_):
     if progress_cb:
         progress_cb(0.0)
         
@@ -654,18 +781,37 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
     try:
         audiopath = replace_ext(mp4_input, '_audio.wav')
         instpath = replace_ext(mp4_input, '_inst.mp3')
+        thumbnail_out_path = None
+        notitle_out_path = replace_ext(inputpath, '_notitle.mp4')
+        title_out_path = replace_ext(inputpath, '_title.mp4')
+        video_out_path = notitle_out_path if title_info is not None else output_path
+        
         extract_audio(mp4_input, audiopath)
         
         instrumental.instrumental(audiopath, instpath, output_inst_with_backup=True, progress_cb=instrumental_progress_cb)
         
         if blank_video:
-            audio_with_blank(instpath, output_path)
+            w, h = audio_with_blank(instpath, video_out_path)
         else:
-            video_with_audio(mp4_input, instpath, output_path)
+            w, h = video_with_audio(mp4_input, instpath, video_out_path)
+            
+        if title_info is not None:
+            if 'bg' in title_info:
+                thumbnail_out_path = replace_ext(inputpath, '_thumb.png')
+                download_file(title_info['bg'], thumbnail_out_path)
+            
+            make_title_video(thumbnail_out_path, w, h, title_info['title'], title_info['subtitle'], title_out_path)
+            video_concat([title_out_path, notitle_out_path], output_path)
+            
     finally:
         if remove_intermediates:
             try_remove(instpath)
             try_remove(audiopath)
+            if title_info is not None:
+                if thumbnail_out_path:
+                    try_remove(thumbnail_out_path)
+                try_remove(notitle_out_path)
+                try_remove(title_out_path)
         
     if progress_cb:
         progress_cb(1.0)
@@ -758,6 +904,7 @@ class Job:
     no_cache : bool = False
     lang_hint : str = None
     blank_video : bool = False
+    uploader : str = None
     arg : dict = None
     
     #can change
@@ -769,6 +916,9 @@ class Job:
     def __post_init__(self):
         if self.keep not in ('nothing', 'video', 'all'):
             raise ValueError('job.keep must be one of: nothing, video, all')
+            
+        if not self.uploader:
+            raise ValueError('uploader must be supplied')
             
         not_nones = int(self.url is not None) + int(self.path is not None) + int(self.data is not None)
         if not_nones != 1:
@@ -788,7 +938,7 @@ class Job:
                 info = dict(size=os.path.getsize(self.path))
                 canon_path = canonify_input_file(open(self.path, 'rb').read())
             elif self.data:
-                title = digest(content=self.data)
+                title = digest(content=self.data)[:8]
                 info = dict(size=len(self.data))
                 canon_path = canonify_input_file(job.data)
                 
@@ -922,7 +1072,7 @@ def work_loop():
                 
                 output = None
                 if job.url is not None:
-                    download_path, title = youtube_download(job.url, local_upload_dir, audio_only=(job.keep == 'nothing' and job.blank_video), dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
+                    download_path, _ = youtube_download(job.url, local_upload_dir, audio_only=(job.keep == 'nothing' and job.blank_video), dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
                     shutil.copy(download_path, job.canon_path)
                 elif job.path is not None:
                     if job.path != job.canon_path:
@@ -931,9 +1081,12 @@ def work_loop():
                     with open(job.canon_path, 'wb') as fh:
                         fh.write(job.data)
                 
+                #TODO disable title flag
+                title_info = dict(bg=job.info.get('thumbnail_hq'), title=job.title, subtitle=job.uploader)
+                
                 set_model_framework(job.model_type or default_model_type)
                 func, selectors, blank_video = job.action()
-                output = generate_with_cache(func, job.canon_path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, progress_cb=process_cb)
+                output = generate_with_cache(func, job.canon_path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, title_info=title_info, progress_cb=process_cb)
                 
                 #TODO remove canon input file?
                 
