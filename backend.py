@@ -638,28 +638,29 @@ Format: Layer, Start, End, Style, Text
     title_stay = 4
     subtitle_stay = 4
     end_wait = 1
+    transition_time = 0.15
     
     title, direction = output_title(title)
     subtitle, _ = output_title(subtitle)
     
     if direction == 'rtl':
-        start_pos = 900
+        start_pos = 1200
         mid_pos = 400
-        end_pos = -100
+        end_pos = -400
         sign = -1
     else:
-        start_pos = -100
+        start_pos = -400
         mid_pos = 400
-        end_pos = 900
+        end_pos = 1200
         sign = 1
 
     lines = [
-        f'Dialogue: 1, {ass_time(title_start)}, {ass_time(title_start + 0.1)}, W1, {{\\move({start_pos}, 350, {mid_pos}, 350, 0, 100)}}{title}',
-        f'Dialogue: 1, {ass_time(title_start + 0.1)}, {ass_time(title_start + 0.1 + title_stay)}, W1, {{\\move({mid_pos}, 350, {mid_pos + (sign * 30)}, 350, 0, {int(title_stay * 1000)})}}{title}',
-        f'Dialogue: 1, {ass_time(title_start + 0.1 + title_stay)}, {ass_time(title_start + 0.2 + title_stay)}, W1, {{\\move({mid_pos + (sign * 30)}, 350, {end_pos}, 350, 0, 100)}}{title}',
-        f'Dialogue: 2, {ass_time(subtitle_start)}, {ass_time(subtitle_start + 0.1)}, W2, {{\\move({start_pos}, 450, {mid_pos}, 450, 0, 100)}}{subtitle}',
-        f'Dialogue: 2, {ass_time(subtitle_start + 0.1)}, {ass_time(subtitle_start + 0.1 + subtitle_stay)}, W2, {{\\move({mid_pos}, 450, {mid_pos + (sign * 30)}, 450, 0, {int(subtitle_stay * 1000)})}}{subtitle}',
-        f'Dialogue: 2, {ass_time(subtitle_start + 0.1 + subtitle_stay)}, {ass_time(subtitle_start + 0.2 + subtitle_stay)}, W2, {{\\move({mid_pos + (sign * 30)}, 450, {end_pos}, 450, 0, 100)}}{subtitle}',
+        f'Dialogue: 1, {ass_time(title_start)}, {ass_time(title_start + transition_time)}, W1, {{\\move({start_pos}, 350, {mid_pos}, 350, 0, {int(transition_time * 1000)})}}{title}',
+        f'Dialogue: 1, {ass_time(title_start + transition_time)}, {ass_time(title_start + transition_time + title_stay)}, W1, {{\\move({mid_pos}, 350, {mid_pos + (sign * 30)}, 350, 0, {int(title_stay * 1000)})}}{title}',
+        f'Dialogue: 1, {ass_time(title_start + transition_time + title_stay)}, {ass_time(title_start + (transition_time * 2) + title_stay)}, W1, {{\\move({mid_pos + (sign * 30)}, 350, {end_pos}, 350, 0, {int(transition_time * 1000)})}}{title}',
+        f'Dialogue: 2, {ass_time(subtitle_start)}, {ass_time(subtitle_start + transition_time)}, W2, {{\\move({start_pos}, 450, {mid_pos}, 450, 0, {int(transition_time * 1000)})}}{subtitle}',
+        f'Dialogue: 2, {ass_time(subtitle_start + transition_time)}, {ass_time(subtitle_start + transition_time + subtitle_stay)}, W2, {{\\move({mid_pos}, 450, {mid_pos + (sign * 30)}, 450, 0, {int(subtitle_stay * 1000)})}}{subtitle}',
+        f'Dialogue: 2, {ass_time(subtitle_start + transition_time + subtitle_stay)}, {ass_time(subtitle_start + (transition_time * 2) + subtitle_stay)}, W2, {{\\move({mid_pos + (sign * 30)}, 450, {end_pos}, 450, 0, {int(transition_time * 1000)})}}{subtitle}',
     ]
     
     ass = header + '\n'.join(lines)
