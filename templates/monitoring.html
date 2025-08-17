@@ -63,12 +63,13 @@
           <table class="table align-middle">
             <thead>
               <tr>
-                <th style="width:18%">Room</th>
-                <th style="width:10%">Type</th>
-                <th style="width:12%">Songs</th>
-                <th style="width:18%">Current</th>
-                <th style="width:16%">Job Status</th>
-                <th style="width:26%">Actions</th>
+                <th style="width:5%">Room</th>
+                <th style="width:5%">Type</th>
+                <th style="width:12%">Created At</th>
+                <th style="width:8%">Songs</th>
+                <th style="width:15%">Current</th>
+                <th style="width:8%">Job Status</th>
+                <th style="width:15%">Actions</th>
               </tr>
             </thead>
             <tbody id="roomsBody"></tbody>
@@ -110,6 +111,12 @@
       });
     }
 
+    function formatDate(epochSec){
+      // local time, e.g. “2025-08-17 14:32”
+      const d = new Date(epochSec * 1000);
+      return d.toLocaleString([], { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }
+
     function ensureJoins(ids){
       // join every room so we get its playlist/player updates
       ids.forEach(id => {
@@ -127,9 +134,11 @@
         const dot = `<span class="status-dot ${r.in_process?'proc':'idle'}"></span>`;
         const statusText = r.in_process ? 'Processing' : (r.num_songs>0 ? 'Idle' : 'Empty');
         const current = r.current_title ? escapeHtml(r.current_title) : '<span class="text-muted">—</span>';
+        const created = r.created_at ? formatDate(r.created_at) : '<span class="text-muted">—</span>';
         return `<tr data-room="${r.room_id}">
           <td><code>${r.room_id}</code></td>
           <td><span class="badge-mode">${modeLabel}</span></td>
+          <td>${created}</td>
           <td>${r.num_songs} <span class="text-muted">(+${r.num_previous} prev)</span></td>
           <td>${current}</td>
           <td>${dot} <span class="ms-1">${statusText}</span></td>
@@ -139,7 +148,7 @@
           </td>
         </tr>`;
       }).join('');
-      body.innerHTML = rows || `<tr><td colspan="6" class="text-center text-muted">No rooms</td></tr>`;
+      body.innerHTML = rows || `<tr><td colspan="7" class="text-center text-muted">No rooms</td></tr>`;
     }
 
     // remove room

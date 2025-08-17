@@ -54,6 +54,7 @@ def create_room_if_valid(room_id: str, mode: str = "multi"):
             "current_song": None,
             "previous_songs": [],
             "mode": mode,
+            "created_at": time.time(),
         }
         created = True
     if created:
@@ -81,6 +82,7 @@ def get_monitor_snapshot():
             "current": getattr(data.get("current_song"), "title", None),
             "in_process": any(j.status == "processing" for j in playlist),
             "link": link,
+            "created_at": data.get("created_at", 0),
         })
     return {"total_rooms": len(items), "rooms": items, "ts": time.time()}
 
@@ -159,6 +161,7 @@ def api_rooms():
             "in_process": in_proc,
             "current_title": (current.title if current else ""),
             "playlist_url": playlist_url,
+            "created_at": data.get("created_at", 0),
         })
     return jsonify(payload), 200
 
