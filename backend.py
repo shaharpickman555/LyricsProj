@@ -518,6 +518,19 @@ def run_process(*args):
 def extract_audio(input, output_audio):
     run_process(ffmpeg_path, '-y', '-i', input, '-vn', output_audio)
     
+def find_time_rates(input):
+    output = run_process('ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type,time_base', '-of', 'compact=p=0', input)
+    video_time = None
+    audio_time = None
+    video_prefix = 'codec_type=video|time_base=1/'
+    audio_prefix = 'codec_type=audio|time_base=1/'
+    for line in output.replace('\r', '').split('\n'):
+        if line.startswith(video_prefix):
+            video_time = int(line[len(video_prefix):])
+        if line.startswith(audio_prefix):
+            audio_time = int(line[len(audio_prefix):])
+    return video_time, audio_time
+    
 def is_video_audio(input):
     output_video = run_process('ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
     output_audio = run_process('ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', input)
@@ -586,10 +599,11 @@ def reencode_video(videopath, outputpath):
     w, h = video_resolution(video_path)
     run_process(ffmpeg_path, '-y', '-i', videopath, '-c:v', 'copy', *video_codec_options, outputpath)
     return w, h
-
     
-def bg_with_subtitles(bg_path, width, height, duration, subtitles_path, output_path, h_to_w_ratio=None, min_width=None):
-    run_process(ffmpeg_path, '-y', *(['-loop', '1', '-i', bg_path, '-f', 'lavfi', '-i', 'anullsrc=cl=stereo:r=44100'] if bg_path is not None else ['-f', 'lavfi', '-i', f'color=c=black:s={w}x{h}', '-f', 'lavfi', '-i', 'anullsrc=cl=stereo:r=44100', '-loop', '1']), *video_codec_options,
+def bg_with_subtitles(bg_path, width, height, video_timebase, audio_timebase, duration, subtitles_path, output_path, h_to_w_ratio=None, min_width=None):
+    run_process(ffmpeg_path, '-y',
+                *(['-loop', '1', '-i', bg_path, '-f', 'lavfi', '-i', f'anullsrc=cl=stereo:r={audio_timebase}'] if bg_path is not None else ['-f', 'lavfi', '-i', f'color=c=black:s={w}x{h}',
+                '-f', 'lavfi', '-i', f'anullsrc=cl=stereo:r={audio_timebase}', '-loop', '1']), '-video_track_timescale', str(video_timebase), *video_codec_options,
                 '-t', str(duration), '-pix_fmt', 'yuv420p', '-filter_complex',
                 f'fps=30[v0]; [v0]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v1]; [v1]ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex[v]',
                 '-map', '[v]:v', '-map', '1:a', output_path)
@@ -610,7 +624,7 @@ def try_remove(path):
     except FileNotFoundError:
         pass
 
-def make_title_video(bg_path, width, height, title, subtitle, output_path):
+def make_title_video(bg_path, width, height, video_timebase, audio_timebase, title, subtitle, output_path, remove_intermediates=True):
     header = '''[Script Info]
 PlayResX: 800
 PlayResY: 800
@@ -669,9 +683,10 @@ Format: Layer, Start, End, Style, Text
     try:
         with open(ass_path, 'w', encoding='utf8') as fh:
             fh.write(ass)
-        bg_with_subtitles(bg_path, width, height, subtitle_start + subtitle_stay + end_wait, ass_path, output_path)
+        bg_with_subtitles(bg_path, width, height, video_timebase, audio_timebase, subtitle_start + subtitle_stay + end_wait, ass_path, output_path)
     finally:
-        try_remove(ass_path)
+        if remove_intermediates:
+            try_remove(ass_path)
     
 def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals_in_inst=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, title_info=None, **_):
     global whisper_model_framework
@@ -706,6 +721,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
         video_out_path = notitle_out_path if title_info is not None else outputpath
         
         extract_audio(inputpath, audiopath)
+        
         
         silence = 0 # TODO video title
         silence_marks = instrumental.instrumental(audiopath,
@@ -755,7 +771,8 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
                 thumbnail_out_path = replace_ext(inputpath, '_thumb.png')
                 download_file(title_info['bg'], thumbnail_out_path)
             
-            make_title_video(thumbnail_out_path, w, h, title_info['title'], title_info['subtitle'], title_out_path)
+            video_timebase, audio_timebase = find_time_rates(notitle_out_path)
+            make_title_video(thumbnail_out_path, w, h, video_timebase, audio_timebase, title_info['title'], title_info['subtitle'], title_out_path, remove_intermediates=remove_intermediates)
             video_concat([title_out_path, notitle_out_path], outputpath)
             
     finally:
@@ -804,7 +821,8 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
                 thumbnail_out_path = replace_ext(inputpath, '_thumb.png')
                 download_file(title_info['bg'], thumbnail_out_path)
             
-            make_title_video(thumbnail_out_path, w, h, title_info['title'], title_info['subtitle'], title_out_path)
+            video_timebase, audio_timebase = find_time_rates(notitle_out_path)
+            make_title_video(thumbnail_out_path, w, h, video_timebase, audio_timebase, title_info['title'], title_info['subtitle'], title_out_path)
             video_concat([title_out_path, notitle_out_path], output_path)
             
     finally:
