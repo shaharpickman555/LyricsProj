@@ -1116,7 +1116,7 @@ def work_loop():
                         fh.write(job.data)
                 
                 #TODO disable title flag
-                title_info = dict(bg=job.info.get('thumbnail_hq'), title=job.title, subtitle=job.uploader)
+                title_info = dict(bg=job.info.get('thumbnail_hq'), title=job.title, subtitle='')
                 
                 set_model_framework(job.model_type or default_model_type)
                 func, selectors, blank_video = job.action()
