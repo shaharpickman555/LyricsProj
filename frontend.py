@@ -1,6 +1,5 @@
-import subprocess
-import os, sys, argparse, logging
-import random, string, time, pprint
+import os, argparse, logging, base64
+import random, string, time
 import re, traceback
 from io import BytesIO
 
@@ -89,7 +88,7 @@ def get_monitor_snapshot():
 
 def broadcast_monitor_snapshot():
     socketio.emit("monitor_update", get_monitor_snapshot(), to="monitor")
-
+                
 @app.get("/")
 def landing():
     return render_template("landing.html")
@@ -228,9 +227,10 @@ def add_song(room_id):
     if youtube_url:
         job_params["url"] = youtube_url
     elif local_file and local_file.filename:
-        path = os.path.join(UPLOAD_FOLDER, secure_filename(local_file.filename))
+        path = os.path.join(UPLOAD_FOLDER, base64.b64encode(os.urandom(8), altchars=b'+-').decode())
         local_file.save(path)
         job_params["path"] = path
+        job_params["title"] = os.path.splitext(local_file.filename)[0]
     else:
         return make_response('Wrong data', 400)
 
