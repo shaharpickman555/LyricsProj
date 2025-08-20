@@ -912,7 +912,7 @@ def title_thread_put(f):
 def add_title_async(cb, job, show_uploader, timeout=None):
     title_thread_put(lambda: add_title_work(cb, job, show_uploader, timeout=timeout))
     
-def add_title_work(cb, job, show_uploader, remove_intermediates=False, timeout=None):
+def add_title_work(cb, job, show_uploader, remove_intermediates=True, timeout=None):
     bg = job.info.get('thumbnail_hq')
     title = job.title
     subtitle = job.uploader if show_uploader else None
