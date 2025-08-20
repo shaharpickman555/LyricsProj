@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 import qrcode
 import yt_dlp
 
-from backend import Job, set_queue, init_thread, stop_thread, set_debug, max_job_filesize, die
+from backend import Job, set_queue, init_thread, stop_thread, title_thread_init, title_thread_stop, add_title_async, set_debug, max_job_filesize, die
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -321,7 +321,7 @@ def search_yt(many):
                 uploader=entry['uploader'],
                 views=entry['view_count'],
                 duration=entry['duration'],
-                thumbnail=min(entry['thumbnails'], key=lambda t: t['height'])['url']
+                thumbnail=min(entry['thumbnails'], key=lambda t: t.get('height', 1000))['url']
             ))
     return jsonify(results), 200
 
@@ -463,14 +463,20 @@ def custom_not_found():
     )
 
 def create_app():
-    init_thread(cb)
+    init_thread(job_cb)
+    title_thread_init()
     create_room_if_valid("temproom")
     logger.info("Done creating App")
     return app
 
-def job_status_callback(updated_job):
+def job_status_callback(job):
+    if job.status == 'error':
+        logger.info(f'{job.tid} error: {job.error} {"".join(traceback.format_exception(job.error))}')
+    elif job.status == 'processing':
+        logger.info(f'progress: {100*job.progress:.2f}%')
+        
     for rid, rdata in rooms.items():
-        if updated_job in rdata["playlist"]:
+        if job in rdata["playlist"]:
             socketio.emit("playlist_updated", serialize_room(rid), to=rid)
             if not rdata["current_song"]:
                 csong = get_current_song(rid)
@@ -481,14 +487,13 @@ def job_status_callback(updated_job):
                 broadcast_monitor_snapshot()
             break
 
-def cb(job):
-    job_status_callback(job)
-    if job.status == 'error':
-        logger.info(f'{job.tid} error: {job.error} {"".join(traceback.format_exception(job.error))}')
-    elif job.status == 'processing':
-        logger.info(f'progress: {100*job.progress:.2f}%')
-    elif job.status == 'done':
-        logger.info(f'{job.tid} is available at {job.out_path} ({job.status})')
+def job_cb(job):
+    if job.status != 'done':
+        job_status_callback(job)
+    else:
+        logger.info(f'{job.tid} is available without title at {job.out_path}')
+        #generate title before actually done
+        add_title_async(job_status_callback, job, True, timeout=20)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -498,4 +503,5 @@ if __name__ == "__main__":
     try:
         socketio.run(create_app(), debug=True, host="0.0.0.0", port=8000, allow_unsafe_werkzeug=True, use_reloader=False)
     finally:
+        title_thread_stop()
         stop_thread()

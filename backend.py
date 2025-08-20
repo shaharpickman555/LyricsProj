@@ -1,6 +1,6 @@
 import time, itertools, sys
-import os, hashlib, base64
-import shutil, threading, ctypes, traceback, inspect
+import os, hashlib, base64, threading, queue
+import shutil, ctypes, traceback, inspect
 import stat, logging, signal, argparse, gc, datetime
 from dataclasses import dataclass
 from collections import namedtuple
@@ -38,6 +38,7 @@ default_model_type = 'faster'
 
 max_local_dir_size = 1024 ** 3
 max_local_dir_num_files = 10
+unimportant_keep_seconds = 3600 * 24 * 1
 
 DOWNLOAD_FILE_USER_AGENT = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1'
 
@@ -237,8 +238,8 @@ def getitem(l, i, default=None):
     except IndexError:
         return default
 
-def download_file(url, path):
-    resp = requests.get(url, headers={'User-Agent': DOWNLOAD_FILE_USER_AGENT}, stream=True)
+def download_file(url, path, timeout=None):
+    resp = requests.get(url, headers={'User-Agent': DOWNLOAD_FILE_USER_AGENT}, stream=True, timeout=timeout)
     with open(path, 'wb') as f:
         for chunk in resp.iter_content(chunk_size=1024):
             if chunk:
@@ -253,17 +254,14 @@ def youtube_info(url, audio_only=True):
     
     with yt_dlp.YoutubeDL(yt_opts) as ydl:
         info = ydl.extract_info(url)
-
+    
     try:
         thumbnail = min(
             (t for t in info['thumbnails'] if 'height' in t),
             key=lambda t: t['height']
         )['url']
         
-        thumbnail_hq = max(
-            (t for t in info['thumbnails'] if 'height' in t),
-            key=lambda t: t['height']
-        )['url']
+        thumbnail_hq = max(info['thumbnails'], key=lambda t: t['preference'])['url']
     except ValueError:
         thumbnail = info['thumbnails'][0]['url']
         thumbnail_hq = thumbnail
@@ -295,7 +293,7 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
             
     if progress_cb:
         progress_cb(1.0)
-    return outfile, info['title']
+    return outfile
 
 def do_segmentation(result):
     if not result:
@@ -342,7 +340,7 @@ def do_segmentation(result):
 
     return all_new_segments
 
-def make_title_video(bg_path, width, height, video_timebase, audio_timebase, title, subtitle, output_path, remove_intermediates=True):
+def make_title_video(bg_path, width, height, video_timebase, audio_timebase, title, subtitle, output_path, remove_intermediates=True, timeout=None):
     ass, ass_duration = ass_utils.make_ass_title(title, subtitle)
     ass_path = video_utils.replace_ext(output_path, '_title.ass')
     
@@ -350,12 +348,12 @@ def make_title_video(bg_path, width, height, video_timebase, audio_timebase, tit
     try:
         with open(ass_path, 'w', encoding='utf8') as fh:
             fh.write(ass)
-        video_utils.bg_with_subtitles(bg_path, width, height, video_timebase, audio_timebase, ass_duration + end_wait, ass_path, output_path)
+        video_utils.bg_with_subtitles(bg_path, width, height, video_timebase, audio_timebase, ass_duration + end_wait, ass_path, output_path, timeout=timeout)
     finally:
         if remove_intermediates:
             video_utils.try_remove(ass_path)
     
-def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals_in_inst=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, title_info=None, **_):
+def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals_in_inst=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, **_):
     global whisper_model_framework
     
     if not transcribe_using_vocals and transcribe_with_backup_vocals:
@@ -382,13 +380,8 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
         asspath = video_utils.replace_ext(inputpath, '.ass')
         instpath = video_utils.replace_ext(inputpath, '_inst.mp3')
         vocalspath = video_utils.replace_ext(inputpath, '_vocals.mp3') if transcribe_using_vocals else None
-        thumbnail_out_path = None
-        notitle_out_path = video_utils.replace_ext(inputpath, '_notitle.mp4')
-        title_out_path = video_utils.replace_ext(inputpath, '_title.mp4')
-        video_out_path = notitle_out_path if title_info is not None else outputpath
         
         video_utils.extract_audio(inputpath, audiopath)
-        
         
         silence = 0 # TODO video title
         silence_marks = instrumental.instrumental(audiopath,
@@ -429,36 +422,22 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
         output_audio_path = audiopath if original_audio else instpath
 
         if blank_video:
-            w, h = video_utils.audio_with_blank(output_audio_path, video_out_path, asspath)
+            video_utils.audio_with_blank(output_audio_path, outputpath, asspath)
         else:
-            w, h = video_utils.video_with_audio_and_subtitles(inputpath, output_audio_path, video_out_path, subtitles_path=asspath)
-            
-        if title_info is not None:
-            if title_info.get('bg'):
-                thumbnail_out_path = video_utils.replace_ext(inputpath, '_thumb.png')
-                download_file(title_info['bg'], thumbnail_out_path)
-            
-            video_timebase, audio_timebase = video_utils.find_time_rates(notitle_out_path)
-            make_title_video(thumbnail_out_path, w, h, video_timebase, audio_timebase, title_info['title'], title_info['subtitle'], title_out_path, remove_intermediates=remove_intermediates)
-            video_utils.video_concat([title_out_path, notitle_out_path], outputpath)
-            
+            video_utils.video_with_audio_and_subtitles(inputpath, output_audio_path, outputpath, subtitles_path=asspath)
+
     finally:
         if remove_intermediates:
             video_utils.try_remove(audiopath)
             video_utils.try_remove(asspath)
             video_utils.try_remove(instpath)
-            if title_info is not None:
-                if thumbnail_out_path:
-                    video_utils.try_remove(thumbnail_out_path)
-                video_utils.try_remove(notitle_out_path)
-                video_utils.try_remove(title_out_path)
             if vocalspath:
                 video_utils.try_remove(vocalspath)
     
     if progress_cb:
         progress_cb(1.0)
 
-def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, blank_video=False, title_info=None, **_):
+def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, blank_video=False, **_):
     if progress_cb:
         progress_cb(0.0)
         
@@ -469,38 +448,20 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
     try:
         audiopath = video_utils.replace_ext(mp4_input, '_audio.wav')
         instpath = video_utils.replace_ext(mp4_input, '_inst.mp3')
-        thumbnail_out_path = None
-        notitle_out_path = video_utils.replace_ext(mp4_input, '_notitle.mp4')
-        title_out_path = video_utils.replace_ext(mp4_input, '_title.mp4')
-        video_out_path = notitle_out_path if title_info is not None else output_path
         
         video_utils.extract_audio(mp4_input, audiopath)
         
         instrumental.instrumental(audiopath, instpath, output_inst_with_backup=True, progress_cb=instrumental_progress_cb)
         
         if blank_video:
-            w, h = video_utils.audio_with_blank(instpath, video_out_path)
+            video_utils.audio_with_blank(instpath, output_path)
         else:
-            w, h = video_utils.video_with_audio(mp4_input, instpath, video_out_path)
-            
-        if title_info is not None:
-            if title_info.get('bg'):
-                thumbnail_out_path = video_utils.replace_ext(mp4_input, '_thumb.png')
-                download_file(title_info['bg'], thumbnail_out_path)
-            
-            video_timebase, audio_timebase = video_utils.find_time_rates(notitle_out_path)
-            make_title_video(thumbnail_out_path, w, h, video_timebase, audio_timebase, title_info['title'], title_info['subtitle'], title_out_path)
-            video_utils.video_concat([title_out_path, notitle_out_path], output_path)
+            video_utils.video_with_audio(mp4_input, instpath, output_path)
             
     finally:
         if remove_intermediates:
             video_utils.try_remove(instpath)
             video_utils.try_remove(audiopath)
-            if title_info is not None:
-                if thumbnail_out_path:
-                    video_utils.try_remove(thumbnail_out_path)
-                video_utils.try_remove(notitle_out_path)
-                video_utils.try_remove(title_out_path)
         
     if progress_cb:
         progress_cb(1.0)
@@ -559,7 +520,24 @@ def dir_size_num_oldest(path):
                     oldest_time = st.st_atime
     return tot, num, oldest
     
+def clean_unimportant():
+    threshold = time.time() - unimportant_keep_seconds
+    for path in (local_upload_dir, local_cache_dir):
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if not os.path.splitext(file)[0].endswith('_'):
+                    #important
+                    continue
+                    
+                filepath = os.path.join(root, file)
+                st = os.lstat(filepath)
+                
+                if stat.S_ISREG(st.st_mode) and st.st_atime < threshold:
+                    logger.info(f'Removing unimportant file {filepath}')
+                    os.remove(filepath)
+    
 def clean_cache():
+    clean_unimportant()
     for path in (local_upload_dir, local_cache_dir):
         while True:
             size, num, oldest = dir_size_num_oldest(path)
@@ -767,7 +745,7 @@ def work_loop():
                 
                 output = None
                 if job.url is not None:
-                    download_path, _ = youtube_download(job.url, local_upload_dir, audio_only=(job.keep == 'nothing' and job.blank_video), dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
+                    download_path = youtube_download(job.url, local_upload_dir, audio_only=(job.keep == 'nothing' and job.blank_video), dont_cache=job.no_cache, progress_cb=youtube_progress_cb)
                     shutil.copy(download_path, job.canon_path)
                 elif job.path is not None:
                     if job.path != job.canon_path:
@@ -776,12 +754,9 @@ def work_loop():
                     with open(job.canon_path, 'wb') as fh:
                         fh.write(job.data)
                 
-                #TODO disable title flag
-                title_info = dict(bg=job.info.get('thumbnail_hq'), title=job.title, subtitle='')
-                
                 set_model_framework(job.model_type or default_model_type)
                 func, selectors, blank_video = job.action()
-                output = generate_with_cache(func, job.canon_path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, title_info=title_info, progress_cb=process_cb)
+                output = generate_with_cache(func, job.canon_path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, progress_cb=process_cb)
                 
                 #TODO remove canon input file?
                 
@@ -890,6 +865,90 @@ def thread_test():
     finally:
         stop_thread()
         
+########################title thread#############################################################
+title_thread = None
+title_should_stop = True
+title_thread_queue = None
+
+def title_thread_loop():
+    global title_should_stop, title_thread_queue
+    
+    while not title_should_stop:
+        try:
+            f = title_thread_queue.get(timeout=1)
+            try:
+                f()
+            except BaseException as e:
+                if not isinstance(e, StopException):
+                    print('error in task', e)
+        except queue.Empty:
+            pass
+        except StopException:
+            break
+    
+def title_thread_init():
+    global title_thread, title_should_stop, title_thread_queue
+    
+    title_thread_stop()
+    
+    title_should_stop = False
+    title_thread_queue = queue.SimpleQueue()
+    title_thread = threading.Thread(target=title_thread_loop)
+    title_thread.start()
+    
+def title_thread_stop():
+    global title_thread, title_should_stop, title_thread_queue
+    if title_thread is not None:
+        title_should_stop = True
+        raise_exception_in_thread(title_thread, StopException)
+        title_thread.join()
+        title_thread = None
+        title_thread_queue = None
+        
+def title_thread_put(f):
+    global title_thread_queue
+    title_thread_queue.put(f)
+    
+def add_title_async(cb, job, show_uploader, timeout=None):
+    title_thread_put(lambda: add_title_work(cb, job, show_uploader, timeout=timeout))
+    
+def add_title_work(cb, job, show_uploader, remove_intermediates=False, timeout=None):
+    bg = job.info.get('thumbnail_hq')
+    title = job.title
+    subtitle = job.uploader if show_uploader else None
+    
+    uniq = base64.b64encode(os.urandom(3), altchars=b'+-').decode()
+    
+    title_out_path = video_utils.replace_ext(job.out_path, f'_{uniq}_title.mp4')
+    
+    output_path = video_utils.replace_ext(job.out_path, f'_{uniq}_.mp4')
+    
+    try:
+        if bg:
+            thumbnail_out_path = video_utils.replace_ext(job.out_path, '_thumb.png')
+            download_file(bg, thumbnail_out_path, timeout=timeout)
+        else:
+            thumbnail_out_path = None
+        
+        w, h = video_utils.video_resolution(job.out_path)
+        video_timebase, audio_timebase = video_utils.find_time_rates(job.out_path)
+        make_title_video(thumbnail_out_path, w, h, video_timebase, audio_timebase, title, subtitle, title_out_path, remove_intermediates=remove_intermediates, timeout=timeout)
+        video_utils.video_concat([title_out_path, job.out_path], output_path, timeout=timeout)
+        
+        with lock:
+            job.update_status_locked('done', output_path)
+        cb(job)
+    except BaseException as e:
+        with lock:
+            job.update_status_locked('error')
+            job.update_error_locked(e)
+        cb(job)
+    finally:
+        if remove_intermediates:
+            if thumbnail_out_path:
+                video_utils.try_remove(thumbnail_out_path)
+            video_utils.try_remove(title_out_path)
+        
 #####################################################################################
 
 def main(argv):
@@ -973,7 +1032,7 @@ def main(argv):
         keep = 'nothing'
 
     if not os.path.isfile(input):  # YT Link
-        input, title = youtube_download(input, local_upload_dir, audio_only=(keep == 'nothing' and args.blank_video), dont_cache=args.dont_use_cache, progress_cb=youtube_progress_cb)
+        input = youtube_download(input, local_upload_dir, audio_only=(keep == 'nothing' and args.blank_video), dont_cache=args.dont_use_cache, progress_cb=youtube_progress_cb)
     
     inputdata = open(input, 'rb').read()
     canon_input = canonify_input_file(inputdata)
@@ -995,8 +1054,10 @@ def main(argv):
     func, available_selectors = actions[keep]
     selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=blank_video).items() if k in available_selectors}
                 
-    generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=blank_video, original_audio=args.keep_audio)
-
+    output = generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=blank_video, original_audio=args.keep_audio)
+    print(output)
+    
+    
 if __name__ == '__main__':
     main(sys.argv)
     #thread_test()

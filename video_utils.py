@@ -12,6 +12,12 @@ def replace_ext(path, ext):
     if '.' not in path:
         return f'{path}{ext}'
     return f'{path[:path.rfind(".")]}{ext}'
+    
+def escape_path(path):
+    bad_chars = '''\\:'"_='''
+    for c in bad_chars:
+        path = path.replace(c, f'\\{c}')
+    return path
 
 def try_remove(path):
     try:
@@ -19,8 +25,8 @@ def try_remove(path):
     except FileNotFoundError:
         pass
         
-def run_process(*args):
-    process = subprocess.run(args, capture_output=True)
+def run_process(*args, timeout=None):
+    process = subprocess.run(args, capture_output=True, timeout=timeout)
     if process.returncode != 0:
         raise RuntimeError(f'process failed: {process.args}\n\n{process.stderr.decode("utf8", errors="ignore")}')
     return process.stdout.decode("utf8", errors="ignore")
@@ -80,50 +86,50 @@ def video_best_resolution(videopath, h_to_w_ratio=None, min_width=None):
     return w, h
     
     
-def audio_with_blank(audiopath, outputpath, subtitles_path=None):
-    run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex'] if subtitles_path else []), '-vcodec', 'h264', outputpath)
+def audio_with_blank(audiopath, outputpath, subtitles_path=None, timeout=None):
+    run_process(ffmpeg_path, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720', '-i', audiopath, '-shortest', *(['-vf', f'ass=\'{escape_path(subtitles_path)}\':fontsdir=fonts:shaping=complex'] if subtitles_path else []), '-vcodec', 'h264', outputpath, timeout=timeout)
     return 1280, 720
     
 video_codec_options = ['-vcodec', 'h264_nvenc']
 #video_codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
     
 def video_with_audio(videopath, audiopath, outputpath, h_to_w_ratio=None, min_width=None):
-    w, h = video_best_resolution(videopath, h_to_w_ratio, min_width)
+    w, h = video_best_resolution(videopath, h_to_w_ratio, min_width, timeout=None)
         
     run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
                 '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex', 
                 f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v];', '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart',
-                *video_codec_options, outputpath)
+                *video_codec_options, outputpath, timeout=timeout)
     return w, h
     
-def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_path, h_to_w_ratio=None, min_width=None):
+def video_with_audio_and_subtitles(videopath, audiopath, outputpath, subtitles_path, h_to_w_ratio=None, min_width=None, timeout=None):
     w, h = video_best_resolution(videopath, h_to_w_ratio, min_width)
         
     run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
                 '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex',
-                f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]; [v0]ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex[v]',
-                '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart', *video_codec_options, outputpath)
+                f'[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]; [v0]ass=\'{escape_path(subtitles_path)}\':fontsdir=fonts:shaping=complex[v]',
+                '-map', '[v]:v', '-map', '1:a', '-movflags','+faststart', *video_codec_options, outputpath, timeout=timeout)
     return w, h
 
-def reencode_video(videopath, outputpath):
+def reencode_video(videopath, outputpath, timeout=None):
     w, h = video_resolution(videopath)
-    run_process(ffmpeg_path, '-y', '-i', videopath, '-c:v', 'copy', *video_codec_options, outputpath)
+    run_process(ffmpeg_path, '-y', '-i', videopath, '-c:v', 'copy', *video_codec_options, outputpath, timeout=timeout)
     return w, h
     
-def bg_with_subtitles(bg_path, width, height, video_timebase, audio_timebase, duration, subtitles_path, output_path, h_to_w_ratio=None, min_width=None):
+def bg_with_subtitles(bg_path, width, height, video_timebase, audio_timebase, duration, subtitles_path, output_path, timeout=None):
     run_process(ffmpeg_path, '-y',
                 *(['-loop', '1', '-i', bg_path, '-f', 'lavfi', '-i', f'anullsrc=cl=stereo:r={audio_timebase}'] if bg_path is not None else ['-f', 'lavfi', '-i', f'color=c=black:s={width}x{height}',
                 '-f', 'lavfi', '-i', f'anullsrc=cl=stereo:r={audio_timebase}', '-loop', '1']), '-video_track_timescale', str(video_timebase), *video_codec_options,
                 '-t', str(duration), '-pix_fmt', 'yuv420p', '-filter_complex',
-                f'fps=30[v0]; [v0]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v1]; [v1]ass=\'{subtitles_path}\':fontsdir=fonts:shaping=complex[v]',
-                '-map', '[v]:v', '-map', '1:a', output_path)
+                f'fps=30[v0]; [v0]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v1]; [v1]ass=\'{escape_path(subtitles_path)}\':fontsdir=fonts:shaping=complex[v]',
+                '-map', '[v]:v', '-map', '1:a', output_path, timeout=timeout)
 
-def video_concat(video_paths, output_path):
+def video_concat(video_paths, output_path, timeout=None):
     list_path = replace_ext(output_path, '_list.txt')
     try:
         with open(list_path, 'w', encoding='utf8') as fh:
             fh.write('\n'.join(f"file '{os.path.abspath(video_path)}'" for video_path in video_paths))
             
-        run_process(ffmpeg_path, '-y', '-f', 'concat', '-safe', '0', '-i', list_path, '-c', 'copy', output_path)
+        run_process(ffmpeg_path, '-y', '-f', 'concat', '-safe', '0', '-i', list_path, '-c', 'copy', output_path, timeout=timeout)
     finally:
         try_remove(list_path)
