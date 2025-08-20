@@ -237,6 +237,7 @@ def add_song(room_id):
     try:
         job = Job(**job_params)
     except Exception as e:
+        logger.error('Error creating job', ''.join(traceback.format_exception(e)))
         flash(f"Error creating job: {str(e)}", "danger")
         return make_response('Error', 500)
 

@@ -255,18 +255,27 @@ def youtube_info(url, audio_only=True):
     with yt_dlp.YoutubeDL(yt_opts) as ydl:
         info = ydl.extract_info(url)
     
+    upload_date = info.get('upload_date')
+    if isinstance(upload_date, str):
+        upload_date = int(datetime.datetime(year=int(upload_date[:4]), month=int(upload_date[4:6]), day=int(upload_date[6:8])).timestamp())
+    else:
+        upload_date = None
+    
     try:
         thumbnail = min(
             (t for t in info['thumbnails'] if 'height' in t),
             key=lambda t: t['height']
         )['url']
         
-        thumbnail_hq = max(info['thumbnails'], key=lambda t: t['preference'])['url']
+        if upload_date is None or upload_date > datetime.datetime(year=2015, month=1, day=1).timestamp():
+            thumbnail_hq = max(info['thumbnails'], key=lambda t: t['preference'])['url']
+        else:
+            thumbnail_hq = thumbnail
     except ValueError:
         thumbnail = info['thumbnails'][0]['url']
         thumbnail_hq = thumbnail
 
-    return info['id'], info['title'], dict(duration=info['duration'], thumbnail=thumbnail, thumbnail_hq=thumbnail_hq), f'{info["id"]}.{"mp3" if audio_only else "mp4"}'
+    return info['id'], info['title'], dict(duration=info['duration'], thumbnail=thumbnail, thumbnail_hq=thumbnail_hq, upload_date=upload_date), f'{info["id"]}.{"mp3" if audio_only else "mp4"}'
 
 def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress_cb=None):
     if progress_cb:

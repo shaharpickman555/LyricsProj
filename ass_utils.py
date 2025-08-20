@@ -26,7 +26,8 @@ def output_word(word):
 def output_title(title):
     words = title.split(' ')
     direction = dominant_strong_direction(''.join(w for w in words))
-    return r'{\q2}' + ' '.join(output_word(w) for w in words), direction
+    ending = '\u200f' if direction == 'rtl' else ''
+    return r'{\q2}' + ' '.join(output_word(w) for w in words) + ending, direction
     
 def output_line(words, selected_word):
     text_wrap = r'{{\c&H{color}&}}{text}{{\r}}'
@@ -36,8 +37,8 @@ def output_line(words, selected_word):
     direction = dominant_strong_direction(''.join(w.word for w in words))
 
     wrapped = [text_wrap.format(text=output_word(w.word), color=marked_color if w == selected_word else unmarked_colors[i % 2]) for i, w in enumerate(words)]
-
-    return r'{\q2}' + ' '.join(reversed(wrapped) if direction == 'rtl' else wrapped)
+    ending = '\u200f' if direction == 'rtl' else ''
+    return r'{\q2}' + ' '.join(reversed(wrapped) if direction == 'rtl' else wrapped) + ending
 
 def ass_circle(start_layer, x, y, start_time, end_time, fadein_time):
     mid_time = (end_time + start_time) / 2
