@@ -486,9 +486,9 @@ def job_status_callback(job):
                 }, to=rid)
                 broadcast_monitor_snapshot()
             break
-
+    
 def job_cb(job):
-    if job.status != 'done':
+    if not job.out_path:
         job_status_callback(job)
     else:
         logger.info(f'{job.tid} is available without title at {job.out_path}')

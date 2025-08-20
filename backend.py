@@ -762,7 +762,7 @@ def work_loop():
                 
                 current_job = None
                 with lock:
-                    job.update_status_locked('done', output)
+                    job.update_status_locked('processing', output)
                     
                 job_status_cb(job)
             except Exception as e:
@@ -828,7 +828,7 @@ def set_queue(jobs : list[Job]):
         outpath = j.cached_path()
         if not j.no_cache and os.path.exists(outpath):
             with lock:
-                j.update_status_locked('done', outpath)
+                j.update_status_locked('processing', outpath)
             job_status_cb(j)
     
     with lock:
