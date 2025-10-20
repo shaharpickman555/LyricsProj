@@ -93,8 +93,8 @@ def audio_with_blank(audiopath, outputpath, subtitles_path=None, timeout=None):
 video_codec_options = ['-vcodec', 'h264_nvenc']
 #video_codec_options = ['-vcodec', 'libx264', '-g', '30', '-preset', 'ultrafast', '-tune', 'fastdecode']
     
-def video_with_audio(videopath, audiopath, outputpath, h_to_w_ratio=None, min_width=None):
-    w, h = video_best_resolution(videopath, h_to_w_ratio, min_width, timeout=None)
+def video_with_audio(videopath, audiopath, outputpath, h_to_w_ratio=None, min_width=None, timeout=None):
+    w, h = video_best_resolution(videopath, h_to_w_ratio, min_width)
         
     run_process(ffmpeg_path, '-y', '-i', videopath, '-i', audiopath, '-c:v', 'copy',
                 '-c:a', 'aac', '-strict', 'experimental', '-shortest', '-filter_complex', 

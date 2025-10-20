@@ -494,6 +494,8 @@ def job_cb(job):
     else:
         logger.info(f'{job.tid} is available without title at {job.out_path}')
         #generate title before actually done
+        #TODO does this fix moov atom error?
+        time.sleep(1)
         add_title_async(job_status_callback, job, True, timeout=20)
 
 if __name__ == "__main__":
