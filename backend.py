@@ -244,6 +244,16 @@ def download_file(url, path, timeout=None):
         for chunk in resp.iter_content(chunk_size=1024):
             if chunk:
                 f.write(chunk)
+
+#try switching between ipv4 and ipv6 to minimize ip blocking
+def youtube_do(ydl, *args, **kwargs):
+    #try with ipv4 first
+    try:
+        ydl.params['source_address'] = '0.0.0.0'
+        return ydl.extract_info(*args, **kwargs)
+    except yt_dlp.networking.exceptions.HTTPError:
+        ydl.params['source_address'] = '::'
+        return ydl.extract_info(*args, **kwargs)
     
 def youtube_info(url, audio_only=True):
     yt_opts = {
@@ -253,7 +263,7 @@ def youtube_info(url, audio_only=True):
     }
     
     with yt_dlp.YoutubeDL(yt_opts) as ydl:
-        info = ydl.extract_info(url)
+        info = youtube_do(ydl, url)
     
     upload_date = info.get('upload_date')
     if isinstance(upload_date, str):
@@ -295,11 +305,13 @@ def youtube_download(url, local_dir, audio_only=True, dont_cache=False, progress
         ydl_opts['format'] = 'bestaudio'
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=dont_cache)
+        info = youtube_do(ydl, url, download=dont_cache)
         outfile = os.path.join(local_dir, f'{info["id"]}.{ext}')
         if not os.path.exists(outfile) and not dont_cache:
-            ydl.extract_info(url, download=True)
+            youtube_do(ydl, url, download=True)
             
+    #source_address = '0.0.0.0' or '::'
+    #
     if progress_cb:
         progress_cb(1.0)
     return outfile

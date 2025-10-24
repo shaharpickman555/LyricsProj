@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 import qrcode
 import yt_dlp
 
-from backend import Job, set_queue, init_thread, stop_thread, title_thread_init, title_thread_stop, add_title_async, set_debug, max_job_filesize, die
+from backend import Job, set_queue, init_thread, stop_thread, title_thread_init, title_thread_stop, add_title_async, set_debug, max_job_filesize, die, youtube_do
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -314,7 +314,7 @@ def search_yt(many):
     q = q.replace(":", " ")
     results = []
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(q)
+        info = youtube_do(ydl, q)
         for entry in info['entries']:
             results.append(dict(
                 url=entry['url'],
