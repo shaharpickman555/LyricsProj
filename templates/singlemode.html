@@ -906,10 +906,12 @@
       }else{
         currentSrc="";
         cont.style.background="#fff";
+        let qrHelpString = "<br>Use this QR for uploading songs from your phone:"
         cont.innerHTML =
           `<p class="empty-msg text-muted">${
-            data.in_process ? "No songs are done yet; waiting on processing." : "No songs available to play."
-          }</p>`;
+            data.in_process ? "No songs are done yet; waiting on processing. " + qrHelpString : "No songs available to play." + qrHelpString
+          }</p>
+        <img src="/qr?data={{ url_for('singlemode_room', room_id=room_id, _external=True) }}" alt="QR code">`;
       }
     });
 

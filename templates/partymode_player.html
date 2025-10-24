@@ -222,16 +222,6 @@
       <a href="/partymode/{{ room_id }}" target="_blank" class="btn btn-outline-dark btn-xl">Open Playlist</a>
     </div>
 
-    <!-- QR Share -->
-    <div class="qr-card">
-      <h2>Share This Room</h2>
-      <p class="text-muted mb-3">Scan to edit this room’s playlist on your phone.</p>
-      <img class="qr-img"
-           src="/qr?data={{ url_for('partymode_playlist', room_id=room_id, _external=True) }}"
-           width="200" height="200" alt="QR code">
-    </div>
-  </div>
-
   <!-- reusable widget markup (unchanged IDs for JS) -->
   <template id="playerTemplate">
     <video id="videoPlayer" autoplay muted playsinline></video>
@@ -413,12 +403,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }else{
       currentSrc="";
       cont.style.background="#fff";
+      let qrHelpString = "<br>Use this QR for uploading songs from your phone:"
       cont.innerHTML =
         `<p class="empty-msg text-muted">${
           data.in_process ?
-            "No songs are done yet; waiting on processing." :
-            "No songs available to play."
-        }</p>`;
+            "No songs are done yet; waiting on processing."  + qrHelpString:
+            "No songs available to play." + qrHelpString
+        }</p>
+        <img class="qr-img"
+           src="/qr?data={{ url_for('partymode_playlist', room_id=room_id, _external=True) }}"
+           width="200" height="200" alt="QR code">`;
     }
   });
 
