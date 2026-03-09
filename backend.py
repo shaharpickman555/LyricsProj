@@ -673,7 +673,7 @@ class Job:
         blank_video = self.blank_video if is_video else True
         
         func, available_selectors = actions[self.keep]
-        selectors = {k:v for k,v in dict(keep=self.keep, lang_hint=self.lang_hint, blank_video=blank_video, backup_vocals=keep_backup_vocals).items() if k in available_selectors}
+        selectors = {k:v for k,v in dict(keep=self.keep, lang_hint=self.lang_hint, blank_video=blank_video, backup_vocals=self.keep_backup_vocals).items() if k in available_selectors}
         
         return func, selectors, blank_video
         
