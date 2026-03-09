@@ -369,17 +369,29 @@ def singlemode_room(room_id):
 
 
 def serialize_jobs(jobs, current=None):
-    return [{
-        "title": j.title,
-        "uploader": j.uploader,
-        "status": j.status,
-        "progress": j.progress,
-        "is_playing": (current and j.tid == current.tid),
-        "out_path": getattr(j, "out_path", ""),
-        "url": getattr(j, "url", ""),
-        "info": getattr(j, "info", {}),
-        "error": str(j.error) if j.status == "error" else "",
-    } for j in jobs]
+    serialized = []
+    for j in jobs:
+        info_flags = []
+        if j.lang_hint:
+            info_flags.append(f'language hint: {j.lang_hint}')
+        if j.blank_video:
+            info_flags.append('blank video')
+        if not j.keep_backup_vocals:
+            info_flags.append('without backup vocals')
+        if no_cache:
+            info_flags.append('skipping cache')
+        serialized.append({
+            "title": j.title,
+            "uploader": j.uploader,
+            "status": j.status,
+            "progress": j.progress,
+            "is_playing": (current and j.tid == current.tid),
+            "out_path": getattr(j, "out_path", ""),
+            "url": getattr(j, "url", ""),
+            "info": dict(infotext=', '.join(info_flags), **getattr(j, "info", {})),
+            "error": str(j.error) if j.status == "error" else "",
+        })
+    return serialized
 
 def serialize_room(room_id):
     rdata = rooms[room_id]

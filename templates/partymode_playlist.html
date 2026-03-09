@@ -385,6 +385,7 @@
         <h6 id="songTitleHeading" class="mb-3"></h6>
         <img id="songThumbnail" class="song-thumbnail d-none" src="" alt="Thumbnail">
         <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
+        <p><span id="songInfotext"></span></p>
         <p><strong>Uploader:</strong> <span id="uploaderText"></span></p>
         <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
         <p id="errorTextContainer"><strong>Error:</strong> <span id="errorText"></span></p>
@@ -665,6 +666,7 @@
                   data-title="${safe}"
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
+                  data-infotext="${job.info?.infotext}"
                   data-uploader="${job.uploader}"
                   data-thumbnail="${thumbnail}"
                   data-error="${job.error}">?</button>`;
@@ -690,6 +692,7 @@
                   data-title="${safe}"
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
+                  data-infotext="${job.info?.infotext}"
                   data-uploader="${job.uploader}"
                   data-thumbnail="${thumbnail}"
                   data-error="${job.error}">?</button>`;
@@ -719,6 +722,7 @@
           dur = `${m}:${s.toString().padStart(2,"0")}`;
         }
         document.getElementById("songDurationText").textContent = dur;
+        document.getElementById("songInfotext").textContent = t.infotext;
         document.getElementById("uploaderText").textContent = t.uploader;
         document.getElementById("errorText").textContent = t.error;
         document.getElementById("errorTextContainer").style.display = (t.error.length > 0) ? 'block' : 'none';

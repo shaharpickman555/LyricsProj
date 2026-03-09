@@ -441,6 +441,7 @@
         <h6 id="songTitleHeading" class="mb-3"></h6>
         <img id="songThumbnail" class="song-thumbnail d-none" src="" alt="Thumbnail">
         <p><strong>Duration:</strong> <span id="songDurationText"></span></p>
+        <p><span id="songInfotext"></span></p>
         <p><strong>URL:</strong> <a id="songUrlLink" href="#" target="_blank"></a></p>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
@@ -700,6 +701,7 @@
                   data-title="${safe}"
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
+                  data-infotext="${job.info?.infotext}"
                   data-uploader="${uploader}"
                   data-thumbnail="${thumbnail}">?</button>`;
         if (!job.is_playing) html += `<button class="remove-btn btn btn-sm" data-index="${i}">❌</button>`;
@@ -724,6 +726,7 @@
                   data-title="${safe}"
                   data-url="${job.url||""}"
                   data-duration="${job.info?.duration||"N/A"}"
+                  data-infotext="${job.info?.infotext}"
                   data-uploader="${uploader}"
                   data-thumbnail="${thumbnail}">?</button>`;
         html += `<button class="restore-btn btn btn-sm" data-index="${i}">⤴️ Restore</button>`;
@@ -749,6 +752,7 @@
           dur = `${m}:${s.toString().padStart(2,"0")}`;
         }
         document.getElementById("songDurationText").textContent = dur;
+        document.getElementById("songInfotext").textContent = t.infotext;
         songInfoModal.show();
       }
     });
