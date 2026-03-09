@@ -346,14 +346,17 @@ def main(argv):
     def prog(progress):
         print(f'progress: {progress}')
         
-    load_vocals_roformer()
+    with_backup_in_inst = False
+        
     start = time.time()
-    inst, vocals, samplerate = roformer_demix(argv[1], load_func=load_vocals_roformer, progress_cb=prog)
+    inst, vocals, samplerate = roformer_demix(argv[1], load_func=load_vocals_roformer if with_backup_in_inst load_vocals_roformer, progress_cb=prog)
     end = time.time()
     print(end - start)
     
-    torchaudio.save(f'{argv[1]}.vocals.mp3', vocals.cpu(), samplerate)
-    torchaudio.save(f'{argv[1]}.inst.mp3', inst.cpu(), samplerate)
+    name, ext = os.path.splitext(argv[1])
+    
+    torchaudio.save(f'{name}.vocals.{ext}', vocals.cpu(), samplerate)
+    torchaudio.save(f'{name}.inst.{ext}', inst.cpu(), samplerate)
     
 if __name__ == '__main__':
     main(sys.argv)
