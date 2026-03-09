@@ -378,7 +378,7 @@ def serialize_jobs(jobs, current=None):
             info_flags.append('blank video')
         if not j.keep_backup_vocals:
             info_flags.append('without backup vocals')
-        if no_cache:
+        if j.no_cache:
             info_flags.append('skipping cache')
         serialized.append({
             "title": j.title,
