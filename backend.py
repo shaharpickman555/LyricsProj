@@ -778,7 +778,7 @@ def work_loop():
                 
                 set_model_framework(job.model_type or default_model_type)
                 func, selectors, blank_video = job.action()
-                output = generate_with_cache(func, job.canon_path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, blank_video=blank_video, progress_cb=process_cb)
+                output = generate_with_cache(func, job.canon_path, selectors=selectors, dont_cache=job.no_cache, lang_hint=job.lang_hint, backup_vocals=job.keep_backup_vocals, blank_video=blank_video, progress_cb=process_cb)
                 
                 #TODO remove canon input file?
                 
@@ -1089,7 +1089,7 @@ def main(argv):
     func, available_selectors = actions[keep]
     selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=blank_video, backup_vocals=backup_vocals).items() if k in available_selectors}
                 
-    output = generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=blank_video, original_audio=args.keep_audio)
+    output = generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, backup_vocals=backup_vocals, blank_video=blank_video, original_audio=args.keep_audio)
     print(output)
     
     
