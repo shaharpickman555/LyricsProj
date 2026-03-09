@@ -1,10 +1,13 @@
-import os, sys, itertools, yaml
+import os, sys, itertools, yaml, logging
 import time
 from pathlib import Path
 import torch
 import torchaudio
 import demucs.api
 from mel_band_roformer import MelBandRoformer
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 LOAD_DEMUCS_MODEL_PROGRESS = 0.1
 DEMUCS_MODEL_PROGRESS = 0.9 #10% load, 90% process
@@ -288,22 +291,22 @@ def instrumental(audioinput, output_inst, output_vocals=None, output_inst_with_b
             progress_cb(VOCALS_PROGRESS + (progress * KARAOKE_PROGRESS))
     
     if not output_inst_with_backup or (output_vocals is not None and output_vocals_with_backup):
-        print('doing vocal separation')
+        logger.info('doing vocal separation')
         if vocals_use_roformer:
             inst_without_backing, vocals_with_backing, d_samplerate = roformer_demix(audioinput, load_func=load_vocals_roformer, progress_cb=vocals_progress)
         else:
             inst_without_backing, vocals_with_backing, d_samplerate = demucs_demix(audioinput, progress_cb=vocals_progress)
     else:
         # not needed
-        print('skipping vocal separation')
+        logger.info('skipping vocal separation')
         inst_without_backing, vocals_with_backing, d_samplerate = None, None, None
         
     if output_inst_with_backup or (output_vocals is not None and not output_vocals_with_backup):
-        print('doing karaoke separation')
+        logger.info('doing karaoke separation')
         inst_with_backing, vocals_without_backing, r_samplerate = roformer_demix(audioinput, load_func=load_karaoke_roformer, progress_cb=karaoke_progress)
     else:
         # not needed
-        print('skipping karaoke separation')
+        logger.info('skipping karaoke separation')
         inst_with_backing, vocals_without_backing, r_samplerate = None, None, None
     
     if progress_cb:
@@ -344,14 +347,14 @@ def instrumental(audioinput, output_inst, output_vocals=None, output_inst_with_b
 def main(argv):
     #prepare_vocals_ckpt(roformer_model_dir / 'orig_mel_band_roformer_vocals_becruily.ckpt', karaoke_model_ckpt, vocals_model_ckpt)
     def prog(progress):
-        print(f'progress: {progress}')
+        logger.info(f'progress: {progress}')
         
     with_backup_in_inst = False
         
     start = time.time()
     inst, vocals, samplerate = roformer_demix(argv[1], load_func=load_karaoke_roformer if with_backup_in_inst else load_vocals_roformer, progress_cb=prog)
     end = time.time()
-    print(end - start)
+    logger.info('time: ', end - start)
     
     name, ext = os.path.splitext(argv[1])
     

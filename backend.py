@@ -786,6 +786,8 @@ def work_loop():
                 with lock:
                     job.update_status_locked('processing', output)
                     
+                logger.info(f'Job done on {output}: {os.path.getsize(output)}')
+                    
                 job_status_cb(job)
             except Exception as e:
                 if isinstance(e, (StopException, KeyboardInterrupt)):
@@ -951,6 +953,8 @@ def add_title_work(cb, job, show_uploader, remove_intermediates=True, timeout=No
             download_file(bg, thumbnail_out_path, timeout=timeout)
         else:
             thumbnail_out_path = None
+        
+        logger.info(f'title input: {job.out_path}: {os.path.getsize(job.out_path)}')
         
         w, h = video_utils.video_resolution(job.out_path)
         video_timebase, audio_timebase = video_utils.find_time_rates(job.out_path)
