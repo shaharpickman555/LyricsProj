@@ -374,7 +374,7 @@ def make_title_video(bg_path, width, height, video_timebase, audio_timebase, tit
         if remove_intermediates:
             video_utils.try_remove(ass_path)
     
-def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals_in_inst=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, **_):
+def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, transcribe_with_backup_vocals=True, backup_vocals=True, remove_intermediates=True, progress_cb=None, lang_hint=None, blank_video=False, original_audio=False, **_):
     global whisper_model_framework
     
     if not transcribe_using_vocals and transcribe_with_backup_vocals:
@@ -408,7 +408,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
         silence_marks = instrumental.instrumental(audiopath,
                                                     instpath,
                                                     output_vocals=vocalspath,
-                                                    output_inst_with_backup=backup_vocals_in_inst,
+                                                    output_inst_with_backup=backup_vocals,
                                                     output_vocals_with_backup=transcribe_with_backup_vocals,
                                                     start_silence=silence,
                                                     end_silence=silence,
@@ -458,7 +458,7 @@ def make_lyrics_video(inputpath, outputpath, transcribe_using_vocals=True, trans
     if progress_cb:
         progress_cb(1.0)
 
-def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, progress_cb=None, blank_video=False, **_):
+def remove_vocals_from_video(mp4_input, output_path, backup_vocals=True, remove_intermediates=True, progress_cb=None, blank_video=False, **_):
     if progress_cb:
         progress_cb(0.0)
         
@@ -472,7 +472,7 @@ def remove_vocals_from_video(mp4_input, output_path, remove_intermediates=True, 
         
         video_utils.extract_audio(mp4_input, audiopath)
         
-        instrumental.instrumental(audiopath, instpath, output_inst_with_backup=True, progress_cb=instrumental_progress_cb)
+        instrumental.instrumental(audiopath, instpath, output_inst_with_backup=backup_vocals, progress_cb=instrumental_progress_cb)
         
         if blank_video:
             video_utils.audio_with_blank(instpath, output_path)
@@ -570,7 +570,7 @@ def clean_cache():
     
 #########################threading#####################
 
-actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
+actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video', 'backup_vocals']), 'video': (remove_vocals_from_video, ['keep', 'backup_vocals']), 'all': (passthrough, ['keep'])}
 
 class StopException(Exception):
     pass
@@ -592,6 +592,7 @@ class Job:
     no_cache : bool = False
     lang_hint : str = None
     blank_video : bool = False
+    keep_backup_vocals : bool = True
     uploader : str = ''
     arg : dict = None
     
@@ -672,7 +673,7 @@ class Job:
         blank_video = self.blank_video if is_video else True
         
         func, available_selectors = actions[self.keep]
-        selectors = {k:v for k,v in dict(keep=self.keep, lang_hint=self.lang_hint, blank_video=blank_video).items() if k in available_selectors}
+        selectors = {k:v for k,v in dict(keep=self.keep, lang_hint=self.lang_hint, blank_video=blank_video, backup_vocals=keep_backup_vocals).items() if k in available_selectors}
         
         return func, selectors, blank_video
         
@@ -1027,6 +1028,13 @@ def main(argv):
         help='Keep the audio unprocessed. (for debugging)'
     )
     
+    parser.add_argument(
+        '-a', '--no-backup-vocals',
+        action='store_true',
+        default=False,
+        help="Don't include backup vocals in output audio"
+    )
+    
     args = parser.parse_args()
     
     os.makedirs(local_upload_dir, exist_ok=True)
@@ -1069,11 +1077,13 @@ def main(argv):
     #override if only audio
     blank_video = args.blank_video if is_video else True
     
+    backup_vocals = not args.no_backup_vocals
+    
     print(input, canon_input, is_video, is_audio)
     
-    actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video']), 'video': (remove_vocals_from_video, ['keep']), 'all': (passthrough, ['keep'])}
+    actions = {'nothing': (make_lyrics_video, ['keep', 'lang_hint', 'blank_video', 'backup_vocals']), 'video': (remove_vocals_from_video, ['keep', 'backup_vocals']), 'all': (passthrough, ['keep'])}
     func, available_selectors = actions[keep]
-    selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=blank_video).items() if k in available_selectors}
+    selectors = {k:v for k,v in dict(keep=keep, lang_hint=args.lang_hint, blank_video=blank_video, backup_vocals=backup_vocals).items() if k in available_selectors}
                 
     output = generate_with_cache(func, canon_input, selectors=selectors, dont_cache=args.dont_use_cache, progress_cb=process_cb, lang_hint=args.lang_hint, blank_video=blank_video, original_audio=args.keep_audio)
     print(output)

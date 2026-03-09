@@ -220,6 +220,8 @@ def add_song(room_id):
         job_params["no_cache"] = True
     if request.form.get("dont_overlay_video"):
         job_params["blank_video"] = True
+    if request.form.get("dont_include_backup_vocals"):
+        job_params["keep_backup_vocals"] = False
     lang_hint = request.form.get("lang_hint", "")
     if lang_hint and lang_hint in ALLOWED_LANGUAGE_HINTS:
         job_params["lang_hint"] = lang_hint
