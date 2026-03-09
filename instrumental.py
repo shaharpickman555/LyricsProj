@@ -349,7 +349,7 @@ def main(argv):
     with_backup_in_inst = False
         
     start = time.time()
-    inst, vocals, samplerate = roformer_demix(argv[1], load_func=load_vocals_roformer if with_backup_in_inst load_vocals_roformer, progress_cb=prog)
+    inst, vocals, samplerate = roformer_demix(argv[1], load_func=load_karaoke_roformer if with_backup_in_inst else load_vocals_roformer, progress_cb=prog)
     end = time.time()
     print(end - start)
     
